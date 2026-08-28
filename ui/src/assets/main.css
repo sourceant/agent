@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root,
+  .dark {
+    color-scheme: dark;
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 9% 7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 9% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 357 89% 47%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 5% 14%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 50.6%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 98%;
+    --border: 240 6% 16%;
+    --input: 240 6% 16%;
+    --ring: 357 89% 47%;
+    --radius: 0.25rem;
+    --brand: 357 89% 47%;
+    /* Capability pillar accents, shared with the marketing site */
+    --pillar-memory: 217 91% 60%;
+    --pillar-graph: 262 83% 66%;
+    --pillar-review: 142 71% 45%;
+    --pillar-tokens: 38 92% 50%;
+  }
+
+  .light {
+    color-scheme: light;
+    --background: 240 20% 98%;
+    --foreground: 240 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+    --primary: 357 89% 47%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 10% 94%;
+    --secondary-foreground: 240 10% 20%;
+    --muted: 240 10% 94%;
+    --muted-foreground: 240 5% 45%;
+    --accent: 357 60% 96%;
+    --accent-foreground: 357 70% 40%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 70% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 45%;
+    --warning-foreground: 0 0% 100%;
+    --border: 240 10% 90%;
+    --input: 240 10% 90%;
+    --ring: 357 89% 47%;
+    --brand: 357 89% 47%;
+    --pillar-memory: 217 91% 55%;
+    --pillar-graph: 262 83% 58%;
+    --pillar-review: 142 71% 40%;
+    --pillar-tokens: 38 92% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary via-purple-400 to-pink-400 bg-clip-text text-transparent;
+  }
+
+  .light .gradient-text {
+    @apply from-purple-600 via-violet-600 to-pink-600;
+  }
+
+  .gradient-border {
+    @apply relative;
+  }
+
+  .gradient-border::before {
+    content: '';
+    @apply absolute -inset-[1px] rounded-lg bg-gradient-to-r from-primary via-purple-500 to-pink-500 opacity-20;
+  }
+
+  .glass {
+    @apply bg-background/80 backdrop-blur-xl;
+  }
+
+  .light .glass {
+    @apply bg-background/90 backdrop-blur-xl border-b border-border/50;
+  }
+
+  .glow {
+    box-shadow: 0 0 60px -15px hsl(var(--primary) / 0.3);
+  }
+
+  .light .glow {
+    box-shadow: 0 0 60px -15px hsl(var(--primary) / 0.15);
+  }
+
+  .glow-sm {
+    box-shadow: 0 0 30px -10px hsl(var(--primary) / 0.2);
+  }
+
+  .light .glow-sm {
+    box-shadow: 0 0 30px -10px hsl(var(--primary) / 0.1);
+  }
+
+  .text-brand {
+    color: hsl(var(--brand));
+  }
+
+  .bg-brand {
+    background-color: hsl(var(--brand));
+  }
+
+  .border-brand {
+    border-color: hsl(var(--brand));
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .animate-delay-100 {
+    animation-delay: 100ms;
+  }
+
+  .animate-delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .animate-delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .animate-delay-500 {
+    animation-delay: 500ms;
+  }
+}

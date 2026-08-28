@@ -1,3 +1,5 @@
 sourceant-agent
 coverage.out
 coverage.html
+ui/node_modules/
+ui/dist/

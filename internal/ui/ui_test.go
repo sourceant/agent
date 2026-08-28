@@ -3,6 +3,7 @@ package ui
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -14,37 +15,49 @@ func fetch(t *testing.T, path string) *httptest.ResponseRecorder {
 	return recorder
 }
 
-// Everything the page pulls in has to be embedded, or the view is blank on a
-// machine with no network and nobody finds out until it is opened.
-func TestItServesEveryAssetThePageAsksFor(t *testing.T) {
+// The page is built by Vite, so the names are hashed and change every build.
+// What has to hold is that whatever the page asks for is embedded beside it:
+// the agent serves a machine that may have no network, and a missing chunk
+// there is a blank page nobody finds out about until it is opened.
+func TestEverythingThePageAsksForIsEmbeddedBesideIt(t *testing.T) {
 	page := fetch(t, "/")
 	if page.Code != http.StatusOK {
 		t.Fatalf("got %d for the page, want 200", page.Code)
 	}
-	body := page.Body.String()
 
-	for _, asset := range []string{
-		"styles.css", "app.js", "icons.js", "graph.js",
-		"vendor/force-graph.min.js", "favicon.svg",
-	} {
-		if !strings.Contains(body, asset) {
-			t.Errorf("the page does not ask for %s", asset)
-			continue
-		}
-		if response := fetch(t, "/"+asset); response.Code != http.StatusOK {
+	referenced := regexp.MustCompile(`(?:src|href)="\.?(/?assets/[^"]+|/?favicon\.svg)"`).
+		FindAllStringSubmatch(page.Body.String(), -1)
+	if len(referenced) < 2 {
+		t.Fatalf("the page asks for almost nothing, which means it did not build:\n%s", page.Body.String())
+	}
+
+	for _, match := range referenced {
+		asset := "/" + strings.TrimPrefix(match[1], "/")
+		if response := fetch(t, asset); response.Code != http.StatusOK {
 			t.Errorf("got %d for %s, want 200", response.Code, asset)
 		}
 	}
 }
 
-func TestTheGraphLibraryIsWholeRatherThanAStub(t *testing.T) {
-	response := fetch(t, "/vendor/force-graph.min.js")
-
-	if response.Body.Len() < 100_000 {
-		t.Errorf("got %d bytes, want the whole library", response.Body.Len())
+func TestTheBuildCarriesItsOwnGraphLibraries(t *testing.T) {
+	page := fetch(t, "/")
+	entry := regexp.MustCompile(`src="\.?(/?assets/index-[^"]+\.js)"`).
+		FindStringSubmatch(page.Body.String())
+	if entry == nil {
+		t.Fatal("the page has no entry script")
 	}
-	if !strings.Contains(response.Body.String(), "ForceGraph") {
-		t.Error("the vendored file does not define ForceGraph")
+
+	body := fetch(t, "/"+strings.TrimPrefix(entry[1], "/")).Body.String()
+
+	// Both renderers are pulled in dynamically, so the entry names their chunks
+	// rather than containing them. Either way nothing is fetched from a CDN.
+	for _, want := range []string{"force-graph", "3d-force-graph"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the entry script never reaches %s", want)
+		}
+	}
+	if strings.Contains(body, "https://cdn") || strings.Contains(body, "unpkg.com") {
+		t.Error("the page fetches something from a CDN, which a machine with no network cannot")
 	}
 }
 
