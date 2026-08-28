@@ -12,12 +12,18 @@ import (
 )
 
 type stubReader struct {
-	up           bool
-	repositories []core.Repository
-	graph        core.Graph
-	err          error
-	askedFor     string
-	askedOptions core.GraphOptions
+	up              bool
+	repositories    []core.Repository
+	graph           core.Graph
+	indexed         []core.Indexed
+	knowledge       core.KnowledgePage
+	err             error
+	askedFor        string
+	askedOptions    core.GraphOptions
+	askedEverything bool
+	registered      core.Repository
+	recorded        core.Knowledge
+	forgot          string
 }
 
 func (s *stubReader) Healthy(context.Context) bool { return s.up }
@@ -30,6 +36,39 @@ func (s *stubReader) Graph(_ context.Context, repository string, opts core.Graph
 	s.askedFor = repository
 	s.askedOptions = opts
 	return s.graph, s.err
+}
+
+func (s *stubReader) Register(_ context.Context, path, name string) (core.Repository, error) {
+	s.registered = core.Repository{Name: name, Path: path}
+	return s.registered, s.err
+}
+
+func (s *stubReader) Forget(_ context.Context, path string) error {
+	s.forgot = path
+	return s.err
+}
+
+func (s *stubReader) Index(_ context.Context, repository string, everything bool) ([]core.Indexed, error) {
+	s.askedFor = repository
+	s.askedEverything = everything
+	return s.indexed, s.err
+}
+
+func (s *stubReader) Knowledge(_ context.Context, repository string, limit, offset int) (core.KnowledgePage, error) {
+	s.askedFor = repository
+	return s.knowledge, s.err
+}
+
+func (s *stubReader) RecordKnowledge(_ context.Context, repository string, item core.Knowledge) (core.Knowledge, error) {
+	s.askedFor = repository
+	s.recorded = item
+	return item, s.err
+}
+
+func (s *stubReader) ForgetKnowledge(_ context.Context, repository, id string) error {
+	s.askedFor = repository
+	s.forgot = id
+	return s.err
 }
 
 type stubSupervisor struct {

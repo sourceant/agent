@@ -6,6 +6,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -133,6 +134,135 @@ func (c *Client) Graph(ctx context.Context, repository string, opts GraphOptions
 		query.Set("node_limit", strconv.Itoa(opts.NodeLimit))
 	}
 	return get[Graph](ctx, c, "/api/code/graph", query)
+}
+
+// Register covers one more directory, so the next index run reads it too.
+func (c *Client) Register(ctx context.Context, path, name string) (Repository, error) {
+	return send[Repository](ctx, c, http.MethodPost, "/api/code/repositories", nil, map[string]string{
+		"path": path,
+		"name": name,
+	})
+}
+
+// Forget stops covering a directory. What was already indexed is left alone.
+func (c *Client) Forget(ctx context.Context, path string) error {
+	_, err := send[map[string]any](ctx, c, http.MethodDelete, "/api/code/repositories",
+		url.Values{"path": {path}}, nil)
+	return err
+}
+
+// Indexed is what one repository's index run read.
+type Indexed struct {
+	Repository string `json:"repository"`
+	Files      int    `json:"indexed"`
+	Unchanged  int    `json:"unchanged"`
+	Removed    int    `json:"removed"`
+	Skipped    int    `json:"skipped"`
+}
+
+// Index reads repositories into the graph, one or all of them.
+//
+// The core answers when the reading is done, so this takes as long as the
+// repository is large. The caller's context is what bounds it.
+func (c *Client) Index(ctx context.Context, repository string, everything bool) ([]Indexed, error) {
+	return send[[]Indexed](ctx, c, http.MethodPost, "/api/code/index", nil, map[string]any{
+		"repository": repository,
+		"everything": everything,
+		"update":     true,
+	})
+}
+
+// Knowledge is one thing recorded about a repository.
+type Knowledge struct {
+	ID         string         `json:"id"`
+	Kind       string         `json:"kind"`
+	Status     string         `json:"status"`
+	Summary    string         `json:"summary"`
+	Properties map[string]any `json:"properties"`
+}
+
+// KnowledgePage is what a search answered.
+type KnowledgePage struct {
+	Items   []Knowledge `json:"items"`
+	Total   int         `json:"total"`
+	HasMore bool        `json:"has_more"`
+}
+
+// Knowledge reads what is recorded about one repository.
+func (c *Client) Knowledge(ctx context.Context, repository string, limit, offset int) (KnowledgePage, error) {
+	query := url.Values{"repository": {repository}}
+	if limit > 0 {
+		query.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		query.Set("offset", strconv.Itoa(offset))
+	}
+	return get[KnowledgePage](ctx, c, "/api/knowledge", query)
+}
+
+// RecordKnowledge writes something down about a repository.
+func (c *Client) RecordKnowledge(ctx context.Context, repository string, item Knowledge) (Knowledge, error) {
+	return send[Knowledge](ctx, c, http.MethodPut, "/api/knowledge", nil, map[string]any{
+		"repository": repository,
+		"id":         item.ID,
+		"kind":       item.Kind,
+		"status":     item.Status,
+		"summary":    item.Summary,
+		"properties": item.Properties,
+	})
+}
+
+// ForgetKnowledge removes something recorded.
+func (c *Client) ForgetKnowledge(ctx context.Context, repository, id string) error {
+	_, err := send[map[string]any](ctx, c, http.MethodDelete, "/api/knowledge",
+		url.Values{"repository": {repository}, "id": {id}}, nil)
+	return err
+}
+
+func send[T any](ctx context.Context, c *Client, method, path string, query url.Values, payload any) (T, error) {
+	var zero T
+	target := c.baseURL + path
+	if len(query) > 0 {
+		target += "?" + query.Encode()
+	}
+
+	var body io.Reader
+	if payload != nil {
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return zero, err
+		}
+		body = bytes.NewReader(encoded)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
+	if err != nil {
+		return zero, err
+	}
+	req.Header.Set("Accept", "application/json")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return zero, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	answered, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return zero, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return zero, &Error{StatusCode: resp.StatusCode, Detail: detail(answered)}
+	}
+
+	var parsed envelope[T]
+	if err := json.Unmarshal(answered, &parsed); err != nil {
+		return zero, fmt.Errorf("sourceant core answered %s with something other than JSON: %w", path, err)
+	}
+	return parsed.Data, nil
 }
 
 func get[T any](ctx context.Context, c *Client, path string, query url.Values) (T, error) {

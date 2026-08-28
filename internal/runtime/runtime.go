@@ -39,6 +39,13 @@ type Core struct {
 	// DataDir is where the index lives. Both runtimes must agree on it, or
 	// indexing and reading would address two different databases.
 	DataDir string `json:"data_dir,omitempty"`
+	// Mount is a host directory the container can see, for the docker runtime.
+	//
+	// The indexer reads the repository's files, so a container that cannot see
+	// them indexes nothing. It is mounted at the same path it has on the host,
+	// which is what lets one registry of absolute paths mean the same thing to
+	// both runtimes. A repository outside it is not readable this way.
+	Mount string `json:"mount,omitempty"`
 	// User is the uid:gid a container runs as, for the docker runtime.
 	//
 	// The image has a user of its own, and where that user's id differs from
@@ -128,6 +135,9 @@ func (c Core) Serve(port int) (string, []string, error) {
 		}
 		if c.DataDir != "" {
 			args = append(args, "-v", c.DataDir+":/data", "-e", "SOURCEANT_HOME=/data")
+		}
+		if c.Mount != "" {
+			args = append(args, "-v", c.Mount+":"+c.Mount)
 		}
 		if c.User != "" {
 			args = append(args, "--user", c.User)

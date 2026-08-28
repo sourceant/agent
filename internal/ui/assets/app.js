@@ -1,363 +1,646 @@
-/* The local code graph.
- *
- * Colours are concrete hex rather than the CSS custom properties above,
- * because the graph draws to a canvas and cannot resolve them. They are the
- * dashboard's palette, mapped onto what a code graph holds.
- */
-const COLOURS = {
-  repository: '#E20C18',
-  directory: '#9560f0',
-  file: '#3b82f6',
-  import: '#f59e0b',
-  function: '#4ade80',
-  method: '#2dd4bf',
-  class: '#c084fc',
-  struct: '#22d3ee',
-  interface: '#22d3ee',
-  enum: '#22d3ee',
-}
-const OTHER = '#a1a1aa'
+/* The local SourceAnt app: what this machine has indexed, and what is known
+ * about it. Everything comes from the agent, which is the only thing that
+ * knows where the indexer is. */
 
-const LAYOUTS = [
-  { id: 'force', label: 'Force', dag: null },
-  { id: 'tree', label: 'Tree', dag: 'td' },
-  { id: 'radial', label: 'Radial', dag: 'radialout' },
-  { id: 'sideways', label: 'Sideways', dag: 'lr' },
+const view = document.getElementById('view')
+const layer = document.getElementById('layer')
+const tabs = document.getElementById('tabs')
+const themeButton = document.getElementById('theme')
+
+const PAGES = [
+  { id: '', label: 'Overview', icon: 'layout' },
+  { id: 'repositories', label: 'Repositories', icon: 'boxes' },
+  { id: 'graph', label: 'Code graph', icon: 'network' },
+  { id: 'knowledge', label: 'Knowledge', icon: 'lightbulb' },
 ]
 
-/* A file's kind is its language and a symbol's kind is what the parser called
- * it, so kind alone cannot tell a Python file from a Python function. The
- * labels the index carries can, which is what this reads. */
-function groupOf(node) {
-  if (node.synthetic) return node.synthetic
-  const labels = node.labels || []
-  if (labels.includes('File')) return 'file'
-  if (labels.includes('Import')) return 'import'
-  return (node.kind || '').toLowerCase()
-}
-
-/* Files hold their symbols and their imports, and nothing holds the files, so
- * drawing the index as it is stored scatters a repository into one island per
- * file. The directories are already in every path; this reads them out and
- * hangs the files off them, which is the difference between a repository and
- * confetti. The nodes it adds are marked synthetic: they are how this view
- * arranges what the index found, not something the index found. */
-function withFolders(data, repository) {
-  const root = { id: 'tree:', name: repository, kind: 'repository', synthetic: 'repository', path: '' }
-  const folders = new Map([['', root]])
-  const links = [...data.links]
-
-  const folderFor = (path) => {
-    if (folders.has(path)) return folders.get(path)
-    const cut = path.lastIndexOf('/', path.length - 2)
-    const parentPath = cut === -1 ? '' : path.slice(0, cut + 1)
-    const parent = folderFor(parentPath)
-    const folder = {
-      id: `tree:${path}`,
-      name: path.slice(parentPath.length).replace(/\/$/, ''),
-      kind: 'directory',
-      synthetic: 'directory',
-      path,
-    }
-    folders.set(path, folder)
-    links.push({ source: parent.id, target: folder.id, type: 'contains' })
-    return folder
-  }
-
-  for (const node of data.nodes) {
-    if (groupOf(node) !== 'file' || !node.path) continue
-    const cut = node.path.lastIndexOf('/')
-    const folder = folderFor(cut === -1 ? '' : node.path.slice(0, cut + 1))
-    links.push({ source: folder.id, target: node.id, type: 'contains' })
-  }
-
-  return { nodes: [...folders.values(), ...data.nodes], links }
-}
-
-function colourOf(node) {
-  return COLOURS[groupOf(node)] || OTHER
-}
-
-function shortName(name) {
-  return name && name.length > 30 ? `${name.slice(0, 29)}…` : name
-}
-
-const element = {
-  canvas: document.getElementById('canvas'),
-  overlay: document.getElementById('overlay'),
-  repository: document.getElementById('repository'),
-  layouts: document.getElementById('layouts'),
-  search: document.getElementById('search'),
-  tests: document.getElementById('tests'),
-  imports: document.getElementById('imports'),
-  folders: document.getElementById('folders'),
-  symbols: document.getElementById('symbols'),
-  legend: document.getElementById('legend'),
-  tally: document.getElementById('tally'),
-  truncated: document.getElementById('truncated'),
-  theme: document.getElementById('theme'),
-  details: document.getElementById('details'),
-  detailsName: document.getElementById('details-name'),
-  detailsKind: document.getElementById('details-kind'),
-  detailsPath: document.getElementById('details-path'),
-  detailsLinks: document.getElementById('details-links'),
-  closeDetails: document.getElementById('close-details'),
-}
-
 const state = {
+  page: '',
+  repositories: [],
+  repository: '',
+  status: null,
   graph: null,
-  loaded: { nodes: [], links: [], truncated: false },
-  layout: 'force',
-  matching: null,
-  selected: null,
-  labelled: false,
+  error: '',
 }
 
-function canvasColour(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+function escape(text) {
+  return String(text ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 }
 
-function say(message) {
-  element.overlay.innerHTML = message
-  element.overlay.hidden = false
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
+  })
+  const text = await response.text()
+  const body = text ? JSON.parse(text) : null
+  if (!response.ok) throw new Error(body?.error || `the agent answered ${response.status}`)
+  return body
 }
 
-async function read(path) {
-  const response = await fetch(path)
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body.error || `the agent answered ${response.status}`)
-  }
-  return response.json()
+/* Rendering */
+
+document.querySelector('.logo-mark').innerHTML = icon('ant', 15)
+
+function renderTabs() {
+  tabs.innerHTML = PAGES.map((page) => `
+    <a href="#/${page.id}" ${page.id === state.page ? 'aria-current="page"' : ''}>
+      ${icon(page.icon, 14)}<span>${page.label}</span>
+    </a>`).join('')
 }
 
-/* What is drawn, after the toggles and before the layout. Dropping a node has
- * to drop the links that reach it, or the renderer is handed an edge with no
- * end and stops drawing entirely. */
-/* A repository's every function is a texture rather than a picture, so what
- * opens is its shape: folders and files. Symbols and imports are there to be
- * asked for. */
-function wanted(node) {
-  const group = groupOf(node)
-  if (group === 'import') return element.imports.checked
-  if (group === 'file') return true
-  return element.symbols.checked
+function head({ tile, iconName, title, sub, actions = '' }) {
+  return `
+    <div class="page-head">
+      <div class="page-title">
+        <span class="tile ${tile}">${icon(iconName, 24)}</span>
+        <div><h1>${escape(title)}</h1><p class="sub">${escape(sub)}</p></div>
+      </div>
+      <div class="toolbar-group">${actions}</div>
+    </div>`
 }
 
-function visible() {
-  const nodes = state.loaded.nodes.filter(wanted)
-  const kept = new Set(nodes.map((node) => node.id))
-  const links = state.loaded.links
-    .filter((link) => kept.has(link.source.id || link.source) && kept.has(link.target.id || link.target))
-    .map((link) => ({ source: link.source.id || link.source, target: link.target.id || link.target, type: link.type }))
-
-  const data = { nodes: nodes.map((node) => ({ ...node })), links }
-  return element.folders.checked ? withFolders(data, element.repository.value) : data
+function notice(message, bad = true) {
+  return message ? `<p class="notice ${bad ? 'bad' : ''}">${escape(message)}</p>` : ''
 }
 
-function draw() {
-  const data = visible()
-  const dag = LAYOUTS.find((layout) => layout.id === state.layout).dag
-
-  if (!state.graph) {
-    state.graph = new ForceGraph(element.canvas)
-    state.graph
-      .backgroundColor('rgba(0,0,0,0)')
-      .nodeRelSize(4)
-      .nodeLabel((node) => `${node.name} · ${node.kind}`)
-      .nodeCanvasObject(paintNode)
-      .nodePointerAreaPaint((node, colour, ctx) => {
-        ctx.fillStyle = colour
-        ctx.beginPath()
-        ctx.arc(node.x, node.y, 7, 0, 2 * Math.PI)
-        ctx.fill()
-      })
-      .linkColor(() => canvasColour('--canvas-link'))
-      .linkWidth(0.7)
-      .linkDirectionalArrowLength(3)
-      .linkDirectionalArrowRelPos(1)
-      .onNodeClick(select)
-      .onBackgroundClick(() => select(null))
-    state.graph.onEngineStop(() => state.graph.zoomToFit(400, 40))
-  }
-
-  // A drawing small enough to read gets its names at any zoom. A large one
-  // would be soup, so there the names wait until something is zoomed into.
-  state.labelled = data.nodes.length <= 400
-
-  state.graph
-    .dagMode(dag)
-    .dagLevelDistance(dag ? 90 : 40)
-    .onDagError(() => undefined)
-    .width(element.canvas.clientWidth)
-    .height(element.canvas.clientHeight)
-    .graphData(data)
-
-  element.tally.textContent = `${data.nodes.length.toLocaleString()} nodes · ${data.links.length.toLocaleString()} links`
-  element.overlay.hidden = data.nodes.length > 0
-  if (data.nodes.length === 0) {
-    say('Nothing here yet. Index it with <code>sourceant index</code>.')
-  }
-  renderLegend(data.nodes)
+function needRepository() {
+  return `
+    <div class="card"><div class="empty">
+      <h2>Nothing indexed yet</h2>
+      <p>Add a folder and SourceAnt reads it into a graph you can look at and record against.</p>
+      <a class="btn" href="#/repositories">${icon('plus', 16)} Add a repository</a>
+    </div></div>`
 }
 
-function paintNode(node, ctx, scale) {
-  const dimmed = state.matching !== null && !state.matching.has(node.id)
-  const colour = colourOf(node)
-  ctx.globalAlpha = dimmed ? 0.15 : 1
+function repositoryPicker() {
+  if (state.repositories.length < 2) return ''
+  return `<select id="pick-repo" aria-label="Repository">${state.repositories.map((repository) =>
+    `<option value="${escape(repository.name)}" ${repository.name === state.repository ? 'selected' : ''}>
+      ${escape(repository.name)}</option>`).join('')}</select>`
+}
 
-  ctx.beginPath()
-  ctx.arc(node.x, node.y, node.id === state.selected ? 6 : 4, 0, 2 * Math.PI)
-  ctx.fillStyle = colour
-  ctx.fill()
-  if (node.id === state.selected) {
-    ctx.lineWidth = 1.5 / scale
-    ctx.strokeStyle = canvasColour('--canvas-label')
-    ctx.stroke()
+/* Overview */
+
+async function overview() {
+  view.innerHTML = head({
+    tile: 'memory', iconName: 'layout',
+    title: 'Overview',
+    sub: 'What SourceAnt has on this machine.',
+  }) + notice(state.error) + '<div id="body"></div>'
+
+  const body = document.getElementById('body')
+  if (state.repositories.length === 0) {
+    body.innerHTML = needRepository()
+    return
   }
 
-  if (state.labelled || scale > 1.4 || state.matching !== null) {
-    const size = Math.max(11 / scale, 2)
-    ctx.font = `${groupOf(node) === 'file' ? '600 ' : ''}${size}px Inter, sans-serif`
-    ctx.fillStyle = colour
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(shortName(node.name), node.x + 6, node.y)
-  }
-  ctx.globalAlpha = 1
-}
-
-function renderLegend(nodes) {
-  const present = new Set(nodes.map(groupOf))
-  const seen = []
-  for (const group of present) {
-    seen.push({ group, colour: COLOURS[group] || OTHER })
-  }
-  seen.sort((a, b) => a.group.localeCompare(b.group))
-  element.legend.innerHTML = seen
-    .map(({ group, colour }) =>
-      `<span><i class="swatch" style="background:${colour}"></i>${group || 'other'}</span>`)
-    .join('')
-}
-
-function select(node) {
-  state.selected = node ? node.id : null
-  element.details.hidden = !node
-  if (node) {
-    const degree = state.loaded.links.filter((link) =>
-      (link.source.id || link.source) === node.id || (link.target.id || link.target) === node.id).length
-    element.detailsName.textContent = node.name
-    element.detailsKind.textContent = node.synthetic
-      ? `${node.kind} · this view's arrangement`
-      : (groupOf(node) === node.kind ? node.kind : `${groupOf(node)} · ${node.kind}`)
-    element.detailsPath.textContent = node.path || '—'
-    element.detailsLinks.textContent = node.synthetic ? '—' : degree
-  }
-  if (state.graph) state.graph.nodeCanvasObject(paintNode)
-}
-
-function highlight(term) {
-  const needle = term.trim().toLowerCase()
-  state.matching = needle
-    ? new Set(state.loaded.nodes
-        .filter((node) => node.name.toLowerCase().includes(needle) || (node.path || '').toLowerCase().includes(needle))
-        .map((node) => node.id))
-    : null
-  if (state.graph) state.graph.nodeCanvasObject(paintNode)
-}
-
-async function load() {
-  const repository = element.repository.value
-  if (!repository) return
-  say('Reading the index…')
-  try {
-    const query = new URLSearchParams({ repository })
-    if (element.tests.checked) query.set('include_tests', 'true')
-    const graph = await read(`/api/graph?${query}`)
-    state.loaded = graph
-    state.selected = null
-    element.details.hidden = true
-    element.truncated.hidden = !graph.truncated
-    if (graph.truncated) {
-      element.truncated.textContent =
-        'This repository is larger than the limit, so this is part of it, not all of it.'
+  const counts = await Promise.all(state.repositories.map(async (repository) => {
+    const [graph, knowledge] = await Promise.all([
+      api(`/api/graph?repository=${encodeURIComponent(repository.name)}`).catch(() => null),
+      api(`/api/knowledge?repository=${encodeURIComponent(repository.name)}`).catch(() => null),
+    ])
+    return {
+      repository,
+      files: graph ? graph.nodes.filter((n) => (n.labels || []).includes('File')).length : 0,
+      nodes: graph ? graph.nodes.length : 0,
+      knowledge: knowledge ? knowledge.total : 0,
     }
-    draw()
-  } catch (error) {
-    say(`Could not read the graph: ${error.message}`)
+  }))
+
+  const total = (key) => counts.reduce((sum, item) => sum + item[key], 0)
+  body.innerHTML = `
+    <div class="stats">
+      ${stat('Repositories', state.repositories.length)}
+      ${stat('Files', total('files'))}
+      ${stat('Nodes', total('nodes'))}
+      ${stat('Knowledge', total('knowledge'))}
+    </div>
+    <div class="grid-cards">${counts.map(({ repository, files, knowledge }) => `
+      <div class="card hoverable"><div class="item">
+        <span class="item-icon">${icon('folder', 22)}</span>
+        <div class="item-body">
+          <div class="item-head"><h3>${escape(repository.name)}</h3>
+            <span class="badge ${files ? 'success' : 'warning'}">${files ? 'Indexed' : 'Not indexed'}</span>
+          </div>
+          <p class="item-path">${escape(repository.path)}</p>
+          <div class="item-meta">
+            <span>${icon('file', 14)} ${files.toLocaleString()} files</span>
+            <span>${icon('lightbulb', 14)} ${knowledge.toLocaleString()} recorded</span>
+          </div>
+        </div>
+        <div class="item-actions">
+          <a class="btn ghost sm" href="#/graph">Graph</a>
+        </div>
+      </div></div>`).join('')}
+    </div>
+    <p class="tight">Reviews are not here. A review reads a pull request, which is a thing the
+    hosted service does; nothing on this machine produces one.</p>`
+}
+
+function stat(label, value) {
+  return `<div class="card stat"><div class="stat-label">${escape(label)}</div>
+    <div class="stat-value">${value.toLocaleString()}</div></div>`
+}
+
+/* Repositories */
+
+async function repositories() {
+  view.innerHTML = head({
+    tile: 'graph', iconName: 'boxes',
+    title: 'Repositories',
+    sub: 'The folders SourceAnt reads on this machine.',
+    actions: `<button class="btn" id="add">${icon('plus', 16)} Add a folder</button>`,
+  }) + notice(state.error) + '<div id="body"></div>'
+
+  document.getElementById('add').onclick = openPicker
+  const body = document.getElementById('body')
+
+  if (state.repositories.length === 0) {
+    body.innerHTML = `<div class="card"><div class="empty">
+      <h2>No folders yet</h2>
+      <p>Point SourceAnt at a repository on this machine and it reads the files into a graph.</p>
+      <button class="btn" id="add-empty">${icon('plus', 16)} Add a folder</button>
+    </div></div>`
+    document.getElementById('add-empty').onclick = openPicker
+    return
+  }
+
+  body.innerHTML = `<div class="grid-cards">${state.repositories.map((repository) => `
+    <div class="card"><div class="item">
+      <span class="item-icon">${icon('folder', 22)}</span>
+      <div class="item-body">
+        <div class="item-head"><h3>${escape(repository.name)}</h3></div>
+        <p class="item-path">${escape(repository.path)}</p>
+        <div class="item-meta" data-counts="${escape(repository.name)}">
+          <span class="muted">Reading…</span>
+        </div>
+      </div>
+      <div class="item-actions">
+        <button class="btn outline sm" data-index="${escape(repository.name)}">
+          ${icon('refresh', 14)} Re-index</button>
+        <button class="btn ghost icon" data-drop="${escape(repository.path)}"
+          aria-label="Remove ${escape(repository.name)}">${icon('trash', 16)}</button>
+      </div>
+    </div></div>`).join('')}</div>`
+
+  for (const button of body.querySelectorAll('[data-index]')) {
+    button.onclick = () => reindex(button.dataset.index, button)
+  }
+  for (const button of body.querySelectorAll('[data-drop]')) {
+    button.onclick = () => drop(button.dataset.drop)
+  }
+
+  for (const repository of state.repositories) {
+    const graph = await api(`/api/graph?repository=${encodeURIComponent(repository.name)}`).catch(() => null)
+    const slot = body.querySelector(`[data-counts="${CSS.escape(repository.name)}"]`)
+    if (!slot) continue
+    const files = graph ? graph.nodes.filter((n) => (n.labels || []).includes('File')).length : 0
+    slot.innerHTML = files
+      ? `<span>${icon('file', 14)} ${files.toLocaleString()} files</span>
+         <span>${icon('link', 14)} ${graph.links.length.toLocaleString()} links</span>`
+      : '<span class="muted">Not indexed yet. Re-index to read it.</span>'
   }
 }
 
-async function start() {
-  buildLayouts()
-  applyStoredTheme()
-
+async function reindex(name, button) {
+  const original = button.innerHTML
+  button.disabled = true
+  button.innerHTML = `${icon('loader', 14, 'spin')} Reading…`
   try {
-    const repositories = await read('/api/repositories')
-    if (repositories.length === 0) {
-      element.repository.innerHTML = '<option value="">Nothing registered</option>'
-      say('No repository is registered on this machine. Add one with <code>sourceant repo add &lt;path&gt;</code>.')
+    await api('/api/index', { method: 'POST', body: JSON.stringify({ repository: name }) })
+    state.error = ''
+  } catch (error) {
+    state.error = error.message
+  }
+  button.disabled = false
+  button.innerHTML = original
+  await route()
+}
+
+async function drop(path) {
+  if (!confirm(`Stop covering ${path}?\n\nWhat was already indexed is left alone.`)) return
+  try {
+    await api(`/api/repositories?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
+    state.error = ''
+  } catch (error) {
+    state.error = error.message
+  }
+  await load()
+  await route()
+}
+
+/* The folder picker.
+ *
+ * A browser will not tell a page the absolute path of a folder somebody chose,
+ * so the agent lists this machine and the page navigates what it lists. */
+function openPicker() {
+  let here = ''
+  const close = () => { layer.innerHTML = '' }
+
+  const show = async (path) => {
+    let listing
+    try {
+      listing = await api(`/api/browse?path=${encodeURIComponent(path || '')}`)
+    } catch (error) {
+      layer.querySelector('#picker').innerHTML =
+        `<p class="empty">${escape(error.message)}</p>`
       return
     }
-    element.repository.innerHTML = repositories
-      .map((repository) => `<option value="${repository.name}">${repository.name}</option>`)
-      .join('')
-    await load()
-  } catch (error) {
-    say(`Could not reach the agent: ${error.message}`)
+    here = listing.path
+    layer.querySelector('#crumbs').textContent = here
+    layer.querySelector('#chosen').textContent = here
+    layer.querySelector('#picker').innerHTML = `
+      ${listing.parent ? `<button data-go="${escape(listing.parent)}">
+        ${icon('chevronUp', 14)} <span class="muted">Up one</span></button>` : ''}
+      ${listing.entries.map((entry) => `
+        <button data-go="${escape(entry.path)}">
+          ${icon('folder', 14)} <span>${escape(entry.name)}</span>
+          ${entry.repository ? '<span class="badge glow marker">git</span>' : ''}
+        </button>`).join('')}
+      ${listing.entries.length === 0 ? '<p class="empty">Nothing inside.</p>' : ''}`
+    for (const button of layer.querySelectorAll('[data-go]')) {
+      button.onclick = () => show(button.dataset.go)
+    }
   }
+
+  layer.innerHTML = `
+    <div class="scrim" id="scrim"><div class="modal">
+      <h2>Add a folder</h2>
+      <p class="crumbs" id="crumbs"></p>
+      <div class="picker" id="picker"></div>
+      <div class="field-row" style="margin-top:1rem">
+        <label class="field" for="repo-name">Name it (optional)</label>
+        <input type="text" id="repo-name" placeholder="Taken from the git remote, or the folder name">
+      </div>
+      <p class="tight">Adding <code id="chosen"></code></p>
+      <p class="notice" id="picker-error" hidden></p>
+      <div class="modal-actions">
+        <button class="btn" id="confirm">${icon('plus', 16)} Add and index</button>
+        <button class="btn outline" id="cancel">Cancel</button>
+      </div>
+    </div></div>`
+
+  layer.querySelector('#cancel').onclick = close
+  layer.querySelector('#scrim').onclick = (event) => {
+    if (event.target.id === 'scrim') close()
+  }
+  layer.querySelector('#confirm').onclick = async () => {
+    const button = layer.querySelector('#confirm')
+    const problem = layer.querySelector('#picker-error')
+    button.disabled = true
+    button.innerHTML = `${icon('loader', 16, 'spin')} Reading…`
+    try {
+      await api('/api/repositories', {
+        method: 'POST',
+        body: JSON.stringify({ path: here, name: layer.querySelector('#repo-name').value.trim() }),
+      })
+      await api('/api/index', { method: 'POST', body: JSON.stringify({ repository: '', everything: true }) })
+      close()
+      await load()
+      await route()
+    } catch (error) {
+      problem.hidden = false
+      problem.textContent = error.message
+      button.disabled = false
+      button.innerHTML = `${icon('plus', 16)} Add and index`
+    }
+  }
+
+  show('')
 }
 
-function buildLayouts() {
-  element.layouts.innerHTML = LAYOUTS
-    .map((layout) =>
-      `<button type="button" data-layout="${layout.id}" aria-pressed="${layout.id === state.layout}">${layout.label}</button>`)
-    .join('')
-  element.layouts.addEventListener('click', (event) => {
+/* Code graph */
+
+let drawing = null
+
+async function graphPage() {
+  view.innerHTML = head({
+    tile: 'graph', iconName: 'network',
+    title: 'Code graph',
+    sub: 'Your code, and how it holds together.',
+    actions: repositoryPicker(),
+  }) + notice(state.error) + '<div id="body" style="display:flex;flex-direction:column;flex:1;min-height:0"></div>'
+
+  const body = document.getElementById('body')
+  if (state.repositories.length === 0) {
+    body.innerHTML = needRepository()
+    return
+  }
+
+  body.innerHTML = `
+    <div class="toolbar">
+      <div class="segmented" id="layouts">${LAYOUTS.map((layout) => `
+        <button type="button" data-layout="${layout.id}"
+          aria-pressed="${layout.id === 'force'}">${layout.label}</button>`).join('')}</div>
+      <div class="toolbar-group">
+        <input type="search" id="find" placeholder="Find a file or symbol" aria-label="Find">
+        <label class="checkline"><input type="checkbox" id="folders" checked> Folders</label>
+        <label class="checkline"><input type="checkbox" id="symbols"> Symbols</label>
+        <label class="checkline"><input type="checkbox" id="imports"> Imports</label>
+        <label class="checkline"><input type="checkbox" id="tests"> Tests</label>
+      </div>
+    </div>
+    <div class="stage">
+      <div id="canvas"></div>
+      <div class="overlay" id="overlay">Reading the index…</div>
+      <aside class="details" id="details" hidden></aside>
+    </div>
+    <p class="notice" id="truncated" hidden></p>
+    <div class="foot"><div class="legend" id="legend"></div><div class="tally" id="tally"></div></div>`
+
+  const picker = document.getElementById('pick-repo')
+  if (picker) picker.onchange = () => { state.repository = picker.value; loadGraph() }
+
+  drawing?.destroy()
+  drawing = new CodeGraph(document.getElementById('canvas'), { onSelect: showDetails })
+
+  document.getElementById('layouts').onclick = (event) => {
     const button = event.target.closest('button[data-layout]')
     if (!button) return
-    state.layout = button.dataset.layout
-    for (const other of element.layouts.querySelectorAll('button')) {
+    for (const other of document.querySelectorAll('#layouts button')) {
       other.setAttribute('aria-pressed', String(other === button))
     }
-    draw()
-  })
+    drawing.setLayout(button.dataset.layout)
+  }
+  document.getElementById('find').oninput = (event) => drawing.highlight(event.target.value)
+  for (const id of ['folders', 'symbols', 'imports']) {
+    document.getElementById(id).onchange = redraw
+  }
+  document.getElementById('tests').onchange = loadGraph
+
+  await loadGraph()
 }
 
-function applyStoredTheme() {
-  let stored = null
+async function loadGraph() {
+  const overlay = document.getElementById('overlay')
+  if (!overlay) return
+  overlay.hidden = false
+  overlay.textContent = 'Reading the index…'
   try {
-    stored = localStorage.getItem('sourceant-theme')
-  } catch {
-    stored = null
+    const tests = document.getElementById('tests').checked
+    state.graph = await api(`/api/graph?repository=${encodeURIComponent(state.repository)}${tests ? '&include_tests=true' : ''}`)
+    redraw()
+  } catch (error) {
+    overlay.textContent = error.message
   }
-  setTheme(stored === 'light' ? 'light' : 'dark')
+}
+
+function redraw() {
+  if (!state.graph) return
+  const keepImports = document.getElementById('imports').checked
+  const keepSymbols = document.getElementById('symbols').checked
+  const nodes = state.graph.nodes.filter((node) => {
+    const group = groupOf(node)
+    if (group === 'import') return keepImports
+    if (group === 'file') return true
+    return keepSymbols
+  })
+  const kept = new Set(nodes.map((node) => node.id))
+  const links = state.graph.links
+    .filter((link) => kept.has(link.source) && kept.has(link.target))
+    .map((link) => ({ ...link }))
+
+  let data = { nodes: nodes.map((node) => ({ ...node })), links }
+  if (document.getElementById('folders').checked) data = withFolders(data, state.repository)
+
+  drawing.show(data)
+
+  const overlay = document.getElementById('overlay')
+  overlay.hidden = data.nodes.length > 0
+  if (data.nodes.length === 0) {
+    overlay.innerHTML = 'Nothing here yet. Re-index it from <a href="#/repositories">Repositories</a>.'
+  }
+  document.getElementById('tally').textContent =
+    `${data.nodes.length.toLocaleString()} nodes · ${data.links.length.toLocaleString()} links`
+
+  const groups = [...new Set(data.nodes.map(groupOf))].sort()
+  document.getElementById('legend').innerHTML = groups.map((group) =>
+    `<span><i class="swatch" style="background:${COLOURS[group] || OTHER}"></i>${escape(group || 'other')}</span>`).join('')
+
+  const truncated = document.getElementById('truncated')
+  truncated.hidden = !state.graph.truncated
+  truncated.textContent = 'This repository is larger than the limit, so this is part of it, not all of it.'
+}
+
+function showDetails(node) {
+  const panel = document.getElementById('details')
+  if (!panel) return
+  panel.hidden = !node
+  if (!node) return
+  const degree = state.graph.links.filter((link) =>
+    link.source === node.id || link.target === node.id).length
+  panel.innerHTML = `
+    <button class="btn ghost icon" id="close-details" aria-label="Close">${icon('x', 14)}</button>
+    <h2>${escape(node.name)}</h2>
+    <dl>
+      <dt>Kind</dt><dd>${escape(node.synthetic ? `${node.kind} · this view's arrangement` : node.kind)}</dd>
+      <dt>Path</dt><dd>${escape(node.path || '—')}</dd>
+      <dt>Links</dt><dd>${node.synthetic ? '—' : degree}</dd>
+    </dl>`
+  document.getElementById('close-details').onclick = () => drawing.select(null)
+}
+
+/* Knowledge */
+
+async function knowledge() {
+  view.innerHTML = head({
+    tile: 'memory', iconName: 'lightbulb',
+    title: 'Knowledge',
+    sub: 'The decisions, conventions and constraints behind this code.',
+    actions: `${repositoryPicker()}
+      <button class="btn" id="record">${icon('plus', 16)} Record something</button>`,
+  }) + notice(state.error) + '<div id="body"></div>'
+
+  const body = document.getElementById('body')
+  if (state.repositories.length === 0) {
+    body.innerHTML = needRepository()
+    return
+  }
+
+  const picker = document.getElementById('pick-repo')
+  if (picker) picker.onchange = () => { state.repository = picker.value; knowledge() }
+  document.getElementById('record').onclick = () => openRecord()
+
+  let page
+  try {
+    page = await api(`/api/knowledge?repository=${encodeURIComponent(state.repository)}&limit=100`)
+  } catch (error) {
+    body.innerHTML = notice(error.message)
+    return
+  }
+
+  if (page.items.length === 0) {
+    body.innerHTML = `<div class="card"><div class="empty">
+      <h2>Nothing recorded yet</h2>
+      <p>Why a thing is the way it is outlives the code that does it. Write one down and every
+      agent reading this repository over MCP gets it too.</p>
+      <button class="btn" id="record-empty">${icon('plus', 16)} Record something</button>
+    </div></div>`
+    document.getElementById('record-empty').onclick = () => openRecord()
+    return
+  }
+
+  body.innerHTML = `<div class="grid-cards">${page.items.map((item) => `
+    <div class="card"><div class="item">
+      <span class="item-icon">${icon('lightbulb', 22)}</span>
+      <div class="item-body">
+        <div class="item-head">
+          <h3>${escape(item.id)}</h3>
+          <span class="badge secondary">${escape(item.kind)}</span>
+          ${item.status ? `<span class="badge outline">${escape(item.status)}</span>` : ''}
+        </div>
+        <p class="summary">${escape(item.summary)}</p>
+        ${Object.keys(item.properties || {}).length ? `<dl class="props">${
+          Object.entries(item.properties).map(([key, value]) =>
+            `<dt>${escape(key)}</dt><dd>${escape(typeof value === 'string' ? value : JSON.stringify(value))}</dd>`).join('')
+        }</dl>` : ''}
+      </div>
+      <div class="item-actions">
+        <button class="btn ghost icon" data-edit="${escape(item.id)}" aria-label="Edit">${icon('pencil', 16)}</button>
+        <button class="btn ghost icon" data-forget="${escape(item.id)}" aria-label="Remove">${icon('trash', 16)}</button>
+      </div>
+    </div></div>`).join('')}</div>`
+
+  for (const button of body.querySelectorAll('[data-edit]')) {
+    button.onclick = () => openRecord(page.items.find((item) => item.id === button.dataset.edit))
+  }
+  for (const button of body.querySelectorAll('[data-forget]')) {
+    button.onclick = () => forget(button.dataset.forget)
+  }
+}
+
+const KINDS = ['decision', 'convention', 'constraint', 'pattern', 'workaround', 'requirement']
+
+function openRecord(existing) {
+  const close = () => { layer.innerHTML = '' }
+  layer.innerHTML = `
+    <div class="scrim" id="scrim"><div class="modal">
+      <h2>${existing ? 'Edit' : 'Record something'}</h2>
+      <div class="field-row">
+        <label class="field" for="k-id">Name</label>
+        <input type="text" id="k-id" placeholder="retry-limit"
+          value="${escape(existing?.id || '')}" ${existing ? 'readonly' : ''}>
+      </div>
+      <div class="field-row">
+        <label class="field" for="k-kind">Kind</label>
+        <select id="k-kind">${KINDS.map((kind) =>
+          `<option ${existing?.kind === kind ? 'selected' : ''}>${kind}</option>`).join('')}</select>
+      </div>
+      <div class="field-row">
+        <label class="field" for="k-summary">What is true</label>
+        <textarea id="k-summary" placeholder="Charges retry three times, then stop.">${escape(existing?.summary || '')}</textarea>
+      </div>
+      <div class="field-row">
+        <label class="field" for="k-why">Why</label>
+        <textarea id="k-why" placeholder="The provider rate limits after four.">${escape(existing?.properties?.why || '')}</textarea>
+      </div>
+      <p class="notice" id="record-error" hidden></p>
+      <div class="modal-actions">
+        <button class="btn" id="save">${icon('check', 16)} Save</button>
+        <button class="btn outline" id="cancel">Cancel</button>
+      </div>
+    </div></div>`
+
+  layer.querySelector('#cancel').onclick = close
+  layer.querySelector('#scrim').onclick = (event) => {
+    if (event.target.id === 'scrim') close()
+  }
+  layer.querySelector('#save').onclick = async () => {
+    const problem = layer.querySelector('#record-error')
+    const id = layer.querySelector('#k-id').value.trim()
+    const summary = layer.querySelector('#k-summary').value.trim()
+    if (!id || !summary) {
+      problem.hidden = false
+      problem.textContent = 'A name and what is true are both needed.'
+      return
+    }
+    const why = layer.querySelector('#k-why').value.trim()
+    try {
+      await api('/api/knowledge', {
+        method: 'PUT',
+        body: JSON.stringify({
+          repository: state.repository,
+          id,
+          kind: layer.querySelector('#k-kind').value,
+          status: existing?.status || 'accepted',
+          summary,
+          properties: why ? { ...(existing?.properties || {}), why } : (existing?.properties || {}),
+        }),
+      })
+      close()
+      await knowledge()
+    } catch (error) {
+      problem.hidden = false
+      problem.textContent = error.message
+    }
+  }
+}
+
+async function forget(id) {
+  if (!confirm(`Forget ${id}?`)) return
+  try {
+    await api(`/api/knowledge?repository=${encodeURIComponent(state.repository)}&id=${encodeURIComponent(id)}`,
+      { method: 'DELETE' })
+  } catch (error) {
+    state.error = error.message
+  }
+  await knowledge()
+}
+
+/* Shell */
+
+async function load() {
+  try {
+    state.repositories = await api('/api/repositories')
+    state.error = ''
+  } catch (error) {
+    state.repositories = []
+    state.error = `${error.message}. Is sourceant-agent running?`
+  }
+  if (!state.repositories.some((repository) => repository.name === state.repository)) {
+    state.repository = state.repositories[0]?.name || ''
+  }
+}
+
+async function route() {
+  state.page = (location.hash.replace(/^#\/?/, '') || '').split('?')[0]
+  if (!PAGES.some((page) => page.id === state.page)) state.page = ''
+  renderTabs()
+  view.classList.toggle('fills', state.page === 'graph')
+  if (state.page !== 'graph') {
+    drawing?.destroy()
+    drawing = null
+  }
+  if (state.page === 'repositories') return repositories()
+  if (state.page === 'graph') return graphPage()
+  if (state.page === 'knowledge') return knowledge()
+  return overview()
 }
 
 function setTheme(theme) {
   document.documentElement.className = theme
-  element.theme.textContent = theme === 'dark' ? 'Light' : 'Dark'
+  themeButton.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon', 16)
+  themeButton.setAttribute('aria-label', theme === 'dark' ? 'Light mode' : 'Dark mode')
   try {
     localStorage.setItem('sourceant-theme', theme)
   } catch {
     // A browser that refuses storage still gets the theme, just not the memory.
   }
-  if (state.graph) state.graph.linkColor(() => canvasColour('--canvas-link'))
+  drawing?.repaint()
 }
 
-element.repository.addEventListener('change', load)
-element.tests.addEventListener('change', load)
-element.imports.addEventListener('change', draw)
-element.folders.addEventListener('change', draw)
-element.symbols.addEventListener('change', draw)
-element.search.addEventListener('input', (event) => highlight(event.target.value))
-element.closeDetails.addEventListener('click', () => select(null))
-element.theme.addEventListener('click', () =>
-  setTheme(document.documentElement.className === 'dark' ? 'light' : 'dark'))
-new ResizeObserver(() => {
-  if (state.graph) {
-    state.graph.width(element.canvas.clientWidth).height(element.canvas.clientHeight)
-  }
-}).observe(element.canvas)
+themeButton.onclick = () =>
+  setTheme(document.documentElement.className === 'dark' ? 'light' : 'dark')
+window.addEventListener('hashchange', route)
 
-start()
+let stored = null
+try {
+  stored = localStorage.getItem('sourceant-theme')
+} catch {
+  stored = null
+}
+setTheme(stored === 'light' ? 'light' : 'dark')
+
+load().then(route)

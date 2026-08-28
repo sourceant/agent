@@ -23,7 +23,10 @@ func TestItServesEveryAssetThePageAsksFor(t *testing.T) {
 	}
 	body := page.Body.String()
 
-	for _, asset := range []string{"styles.css", "app.js", "vendor/force-graph.min.js", "favicon.svg"} {
+	for _, asset := range []string{
+		"styles.css", "app.js", "icons.js", "graph.js",
+		"vendor/force-graph.min.js", "favicon.svg",
+	} {
 		if !strings.Contains(body, asset) {
 			t.Errorf("the page does not ask for %s", asset)
 			continue

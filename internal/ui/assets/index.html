@@ -3,69 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Code graph · SourceAnt</title>
+<title>SourceAnt</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<header class="bar">
+  <div class="bar-inner">
+    <a class="logo" href="#/">
+      <span class="logo-mark" data-icon="ant" aria-hidden="true"></span>
+      <span>SourceAnt</span>
+    </a>
+    <span class="divider"></span>
+    <nav class="tabs" id="tabs"></nav>
+    <span class="spacer"></span>
+    <button class="btn ghost icon" id="theme" type="button" aria-label="Switch theme"></button>
+  </div>
+</header>
+
 <main>
-  <header>
-    <div class="title">
-      <span class="mark" aria-hidden="true">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="9" y="9" width="6" height="6" rx="1"/>
-          <rect x="2" y="2" width="5" height="5" rx="1"/>
-          <rect x="17" y="17" width="5" height="5" rx="1"/>
-          <rect x="17" y="2" width="5" height="5" rx="1"/>
-          <rect x="2" y="17" width="5" height="5" rx="1"/>
-          <path d="M7 4.5h4M13 4.5h4M4.5 7v2M19.5 7v2M7 19.5h4M13 19.5h4M4.5 15v2M19.5 15v2"/>
-        </svg>
-      </span>
-      <div>
-        <h1>Code graph</h1>
-        <p class="subtitle">What the indexer found on this machine.</p>
-      </div>
-    </div>
-    <div class="toggles">
-      <select id="repository" aria-label="Repository"></select>
-      <button id="theme" type="button" aria-label="Switch theme">Light</button>
-    </div>
-  </header>
-
-  <div class="controls">
-    <div class="segmented" id="layouts" role="group" aria-label="Layout"></div>
-    <div class="toggles">
-      <input id="search" type="search" placeholder="Find a file or symbol" aria-label="Find a file or symbol">
-      <label><input id="folders" type="checkbox" checked> Folders</label>
-      <label><input id="symbols" type="checkbox"> Symbols</label>
-      <label><input id="imports" type="checkbox"> Imports</label>
-      <label><input id="tests" type="checkbox"> Tests</label>
-    </div>
-  </div>
-
-  <div class="stage">
-    <div id="canvas"></div>
-    <div class="overlay" id="overlay">Loading…</div>
-    <aside class="details" id="details" hidden>
-      <button type="button" id="close-details" aria-label="Close">&times;</button>
-      <h2 id="details-name"></h2>
-      <dl>
-        <dt>Kind</dt><dd id="details-kind"></dd>
-        <dt>Path</dt><dd id="details-path"></dd>
-        <dt>Links</dt><dd id="details-links"></dd>
-      </dl>
-    </aside>
-  </div>
-
-  <p class="warning" id="truncated" hidden></p>
-
-  <footer>
-    <div class="legend" id="legend"></div>
-    <div class="tally" id="tally"></div>
-  </footer>
+  <div class="container" id="view"></div>
 </main>
 
+<div id="layer"></div>
+
 <script src="vendor/force-graph.min.js"></script>
+<script src="icons.js"></script>
+<script src="graph.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

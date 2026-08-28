@@ -68,7 +68,13 @@ func TestThePythonRuntimeBindsLoopbackDirectly(t *testing.T) {
 // A container binding loopback binds its own, which nothing can reach, so it
 // has to bind every interface inside and be published to loopback outside.
 func TestTheDockerRuntimeBindsInsideAndPublishesOutside(t *testing.T) {
-	core := Core{Runtime: Docker, Image: "ghcr.io/sourceant/sourceant:v1", DataDir: "/data/here", User: "501:20"}
+	core := Core{
+		Runtime: Docker,
+		Image:   "ghcr.io/sourceant/sourceant:v1",
+		DataDir: "/data/here",
+		Mount:   "/home/someone",
+		User:    "501:20",
+	}
 
 	name, args, err := core.Serve(8931)
 	if err != nil {
@@ -84,6 +90,9 @@ func TestTheDockerRuntimeBindsInsideAndPublishesOutside(t *testing.T) {
 		"--host 0.0.0.0 --port 8931",
 		"-v /data/here:/data",
 		"-e SOURCEANT_HOME=/data",
+		// At the same path on both sides, so one registry of absolute paths
+		// means the same thing whichever runtime reads it.
+		"-v /home/someone:/home/someone",
 		"--user 501:20",
 		"--entrypoint ./sourceant",
 		"ghcr.io/sourceant/sourceant:v1 serve",

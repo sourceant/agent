@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/sourceant/agent/internal/browse"
 	"github.com/sourceant/agent/internal/core"
 	"github.com/sourceant/agent/internal/ui"
 )
@@ -23,6 +24,12 @@ type Reader interface {
 	Healthy(ctx context.Context) bool
 	Repositories(ctx context.Context) ([]core.Repository, error)
 	Graph(ctx context.Context, repository string, opts core.GraphOptions) (core.Graph, error)
+	Register(ctx context.Context, path, name string) (core.Repository, error)
+	Forget(ctx context.Context, path string) error
+	Index(ctx context.Context, repository string, everything bool) ([]core.Indexed, error)
+	Knowledge(ctx context.Context, repository string, limit, offset int) (core.KnowledgePage, error)
+	RecordKnowledge(ctx context.Context, repository string, item core.Knowledge) (core.Knowledge, error)
+	ForgetKnowledge(ctx context.Context, repository, id string) error
 }
 
 // Supervision is the part of the supervisor this server reports on.
@@ -62,7 +69,14 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("GET /api/repositories", s.repositories)
+	mux.HandleFunc("POST /api/repositories", s.addRepository)
+	mux.HandleFunc("DELETE /api/repositories", s.dropRepository)
+	mux.HandleFunc("POST /api/index", s.index)
 	mux.HandleFunc("GET /api/graph", s.graph)
+	mux.HandleFunc("GET /api/knowledge", s.knowledge)
+	mux.HandleFunc("PUT /api/knowledge", s.recordKnowledge)
+	mux.HandleFunc("DELETE /api/knowledge", s.forgetKnowledge)
+	mux.HandleFunc("GET /api/browse", s.browse)
 	mux.Handle("GET /", ui.Handler())
 	return mux
 }
@@ -115,6 +129,128 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, http.StatusOK, graph)
+}
+
+func (s *Server) addRepository(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Path string `json:"path"`
+		Name string `json:"name"`
+	}
+	if !readBody(w, r, &body) {
+		return
+	}
+	if body.Path == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a directory"})
+		return
+	}
+	added, err := s.reader.Register(r.Context(), body.Path, body.Name)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, added)
+}
+
+func (s *Server) dropRepository(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a directory"})
+		return
+	}
+	if err := s.reader.Forget(r.Context(), path); err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]string{"path": path})
+}
+
+func (s *Server) index(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Repository string `json:"repository"`
+		Everything bool   `json:"everything"`
+	}
+	if !readBody(w, r, &body) {
+		return
+	}
+	done, err := s.reader.Index(r.Context(), body.Repository, body.Everything)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if done == nil {
+		done = []core.Indexed{}
+	}
+	write(w, http.StatusOK, done)
+}
+
+func (s *Server) knowledge(w http.ResponseWriter, r *http.Request) {
+	repository := r.URL.Query().Get("repository")
+	if repository == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a repository"})
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	page, err := s.reader.Knowledge(r.Context(), repository, limit, offset)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if page.Items == nil {
+		page.Items = []core.Knowledge{}
+	}
+	write(w, http.StatusOK, page)
+}
+
+func (s *Server) recordKnowledge(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Repository string `json:"repository"`
+		core.Knowledge
+	}
+	if !readBody(w, r, &body) {
+		return
+	}
+	if body.Repository == "" || body.ID == "" || body.Summary == "" {
+		write(w, http.StatusBadRequest, problem{Error: "a repository, an id and a summary are needed"})
+		return
+	}
+	recorded, err := s.reader.RecordKnowledge(r.Context(), body.Repository, body.Knowledge)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, recorded)
+}
+
+func (s *Server) forgetKnowledge(w http.ResponseWriter, r *http.Request) {
+	repository := r.URL.Query().Get("repository")
+	id := r.URL.Query().Get("id")
+	if repository == "" || id == "" {
+		write(w, http.StatusBadRequest, problem{Error: "a repository and an id are needed"})
+		return
+	}
+	if err := s.reader.ForgetKnowledge(r.Context(), repository, id); err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]string{"id": id})
+}
+
+func (s *Server) browse(w http.ResponseWriter, r *http.Request) {
+	listing, err := browse.At(r.URL.Query().Get("path"))
+	if err != nil {
+		write(w, http.StatusNotFound, problem{Error: err.Error()})
+		return
+	}
+	write(w, http.StatusOK, listing)
+}
+
+func readBody(w http.ResponseWriter, r *http.Request, into any) bool {
+	if err := json.NewDecoder(r.Body).Decode(into); err != nil {
+		write(w, http.StatusBadRequest, problem{Error: "the body is not readable as JSON"})
+		return false
+	}
+	return true
 }
 
 type problem struct {
