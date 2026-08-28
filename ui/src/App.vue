@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import {
   LayoutDashboard,
   Network,
-  Lightbulb,
+  BookOpen,
   Boxes,
   Settings,
   Sun,
@@ -23,13 +23,13 @@ const route = useRoute()
 const menuOpen = ref(false)
 const userOpen = ref(false)
 
-/* The hosted navigation's names and order, for the parts that exist on a
- * machine. Systems, Inbox, Reviews, Lens, Triage, Analytics and Assistant are
- * all hosted: they need a workspace, a pull request or another person. */
+/* The hosted navigation's names and order, for the parts a machine has.
+ * Systems, Assistant, Inbox, Reviews, Lens, Triage and Analytics are all
+ * hosted: each needs a workspace, a pull request, or another person. */
 const navigation = [
   { name: 'Overview', href: '/', icon: LayoutDashboard },
-  { name: 'Knowledge graph', href: '/graph', icon: Network },
-  { name: 'Knowledge', href: '/knowledge', icon: Lightbulb },
+  { name: 'Knowledge', href: '/knowledge', icon: BookOpen },
+  { name: 'Graphs', href: '/graph', icon: Network },
   { name: 'Repositories', href: '/repositories', icon: Boxes },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]

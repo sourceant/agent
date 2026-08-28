@@ -89,11 +89,54 @@ func TestGraphKeepsWhatTellsAFileFromAFunction(t *testing.T) {
 	if file == nil || symbol == nil {
 		t.Fatal("the captured graph holds no file and function to tell apart")
 	}
-	if file.Kind != "python" {
-		t.Errorf("got file kind %q, want the language", file.Kind)
+	// A file is a file whatever it is written in. Colouring Python files apart
+	// from Go ones would be colouring the wrong question, so the language sits
+	// beside the kind rather than standing in for it.
+	if file.Kind != "file" || file.Language != "python" {
+		t.Errorf("got kind %q language %q, want file and python", file.Kind, file.Language)
 	}
 	if file.Path == "" || symbol.Path == "" {
 		t.Error("got a node with no path, want where the code sits")
+	}
+}
+
+// A drawing sizes a node by how busy it is and colours it by which part of the
+// repository it belongs to, so neither may be missing from what is read.
+func TestGraphKeepsWhatSizesAndColoursANode(t *testing.T) {
+	client := serving(t, map[string]func(http.ResponseWriter, *http.Request){
+		"/api/code/graph": func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write(fixture(t, "graph.json"))
+		},
+	})
+
+	graph, err := client.Graph(context.Background(), "local/sourceant", GraphOptions{})
+	if err != nil {
+		t.Fatalf("reading graph: %v", err)
+	}
+
+	if len(graph.Communities) == 0 {
+		t.Fatal("the captured graph found no parts to colour")
+	}
+	for _, part := range graph.Communities {
+		if part.Name == "" || part.Size == 0 {
+			t.Errorf("got part %+v, want one saying what it is and how big", part)
+		}
+	}
+
+	busiest, coloured := 0, 0
+	for _, node := range graph.Nodes {
+		if node.Degree > busiest {
+			busiest = node.Degree
+		}
+		if node.Community != nil {
+			coloured++
+		}
+	}
+	if busiest == 0 {
+		t.Error("no node says how many lines meet at it")
+	}
+	if coloured == 0 {
+		t.Error("no node says which part it belongs to")
 	}
 }
 

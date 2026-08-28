@@ -33,15 +33,28 @@ type Repository struct {
 
 // Node is one file, import or symbol in a repository's graph.
 //
-// Kind and Labels are not the same question. A Python file's kind is "python"
-// and a Python function's kind is "function", so kind alone cannot tell them
-// apart; labels can. A drawing colours by one and reads by the other.
+// The same shape the hosted graph is drawn from, so one renderer serves both.
+// Kind says what the thing is and never what it is written in: a file is a file
+// whatever its language. Degree is how many lines meet here, which is what
+// sizes it, and Community is which part of the repository it belongs to, which
+// is what colours it.
 type Node struct {
-	ID     string   `json:"id"`
-	Name   string   `json:"name"`
-	Kind   string   `json:"kind"`
-	Labels []string `json:"labels"`
-	Path   string   `json:"path"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Kind      string   `json:"kind"`
+	Language  string   `json:"language,omitempty"`
+	Path      string   `json:"path"`
+	Labels    []string `json:"labels"`
+	Degree    int      `json:"degree"`
+	Community *int     `json:"community"`
+}
+
+// Community is one part of a code graph: symbols more connected to each other
+// than to the rest, named after where they live or what they are built around.
+type Community struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	Size int    `json:"size"`
 }
 
 // Link is a typed edge between two nodes.
@@ -56,9 +69,12 @@ type Link struct {
 // Truncated says the scope was larger than the cap asked for, so what came back
 // is a part of the repository and not the repository.
 type Graph struct {
-	Nodes     []Node `json:"nodes"`
-	Links     []Link `json:"links"`
-	Truncated bool   `json:"truncated"`
+	Nodes       []Node      `json:"nodes"`
+	Links       []Link      `json:"links"`
+	Communities []Community `json:"communities"`
+	Truncated   bool        `json:"truncated"`
+	// Focus is the node it was walked out from, empty if it drew everything.
+	Focus string `json:"focus,omitempty"`
 }
 
 // Error is a non-2xx answer from the core, carrying what it said.
