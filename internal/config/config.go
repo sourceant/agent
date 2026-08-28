@@ -26,15 +26,20 @@ type Config struct {
 	Listen string
 	// Core is the Python executable to supervise.
 	Core string
+	// CoreWasChosen says somebody named that executable, rather than it being
+	// the fallback. An explicit choice outranks whatever was installed.
+	CoreWasChosen bool
 	// CorePort is the port to start it on, zero to pick a free one.
 	CorePort int
 }
 
 // FromEnvironment reads the configuration, filling in what was not set.
 func FromEnvironment() (Config, error) {
+	chosen := os.Getenv(EnvCore)
 	cfg := Config{
-		Listen: valueOr(EnvListen, DefaultListen),
-		Core:   valueOr(EnvCore, DefaultCore),
+		Listen:        valueOr(EnvListen, DefaultListen),
+		Core:          valueOr(EnvCore, DefaultCore),
+		CoreWasChosen: chosen != "",
 	}
 	if raw := os.Getenv(EnvPort); raw != "" {
 		port, err := strconv.Atoi(raw)

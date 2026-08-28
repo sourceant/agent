@@ -13,6 +13,7 @@ import (
 	"github.com/sourceant/agent/internal/api"
 	"github.com/sourceant/agent/internal/config"
 	"github.com/sourceant/agent/internal/core"
+	"github.com/sourceant/agent/internal/runtime"
 	"github.com/sourceant/agent/internal/supervise"
 )
 
@@ -49,9 +50,15 @@ func run() error {
 	coreURL := "http://127.0.0.1:" + strconv.Itoa(port)
 	client := core.New(coreURL, 30*time.Second)
 
+	installed := resolveCore(cfg)
+	name, args, err := installed.Serve(port)
+	if err != nil {
+		return err
+	}
+
 	supervisor := supervise.New(supervise.Options{
-		Name:        cfg.Core,
-		Args:        []string{"serve", "--host", "127.0.0.1", "--port", strconv.Itoa(port)},
+		Name:        name,
+		Args:        args,
 		Ready:       client.Healthy,
 		ReadyWithin: 60 * time.Second,
 		Output:      os.Stderr,
@@ -67,7 +74,8 @@ func run() error {
 	server := api.New(client, supervisor, Version, coreURL)
 	go func() { served <- server.Serve(ctx, cfg.Listen) }()
 
-	fmt.Fprintf(os.Stderr, "sourceant-agent %s listening on %s, core on %s\n", Version, cfg.Listen, coreURL)
+	fmt.Fprintf(os.Stderr, "sourceant-agent %s listening on %s, core on %s (%s)\n",
+		Version, cfg.Listen, coreURL, installed.Describe())
 
 	// Whichever half stops first ends the agent: an agent serving without a
 	// core answers nothing, and a core nobody serves is not reachable.
@@ -77,4 +85,20 @@ func run() error {
 	case err := <-served:
 		return err
 	}
+}
+
+// resolveCore decides which core to start, most specific first.
+//
+// An explicit command wins, because somebody naming one means it. Then what
+// the installer wrote. Then the core on PATH, which is what a person working
+// on the core itself already has and what makes the agent runnable before
+// anything has been installed at all.
+func resolveCore(cfg config.Config) runtime.Core {
+	if cfg.CoreWasChosen {
+		return runtime.Core{Runtime: runtime.Python, Command: cfg.Core}
+	}
+	if installed, err := runtime.Load(runtime.ConfigPath()); err == nil {
+		return installed.Core
+	}
+	return runtime.Core{Runtime: runtime.Python, Command: cfg.Core}
 }
