@@ -1,0 +1,295 @@
+/* The tokens are the dashboard's, so the local view and the hosted one read as
+   one product. Dark is the default there and here; .light is the override. */
+:root,
+.light {
+  --background: 240 20% 98%;
+  --foreground: 240 10% 10%;
+  --card: 0 0% 100%;
+  --muted: 240 10% 94%;
+  --muted-foreground: 240 5% 45%;
+  --border: 240 10% 90%;
+  --primary: 357 89% 47%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 357 60% 96%;
+  --radius: 0.25rem;
+  --canvas-link: #b4b4bd;
+  --canvas-label: #52525b;
+  color-scheme: light;
+}
+
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 9% 7%;
+  --muted: 240 5% 14%;
+  --muted-foreground: 240 5% 64.9%;
+  --border: 240 6% 16%;
+  --primary: 357 89% 47%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 240 4% 16%;
+  --canvas-link: #52525b;
+  --canvas-label: #9ca3af;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  border-color: hsl(var(--border));
+}
+
+body {
+  margin: 0;
+  padding: 2rem 1.5rem;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.mark {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: calc(var(--radius) + 2px);
+  background: hsl(262 83% 66% / 0.15);
+  color: hsl(262 83% 66%);
+  flex: none;
+}
+
+h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+}
+
+select,
+input[type="search"],
+button {
+  font: inherit;
+  color: inherit;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 2px);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 0.125rem;
+  padding: 0.125rem;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.segmented button {
+  border: 0;
+  background: none;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  border-radius: var(--radius);
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.segmented button[aria-pressed="true"] {
+  background: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+}
+
+.toggles {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+}
+
+.stage {
+  position: relative;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 4px);
+  background: hsl(var(--card));
+  overflow: hidden;
+}
+
+#canvas {
+  height: 62vh;
+  min-height: 420px;
+  width: 100%;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--card));
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.overlay code {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.8125rem;
+  background: hsl(var(--muted));
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius);
+}
+
+.details {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: min(20rem, calc(100% - 1.5rem));
+  padding: 0.875rem 1rem;
+  background: hsl(var(--background) / 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.details[hidden] {
+  display: none;
+}
+
+.details h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.details dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.details dt {
+  color: hsl(var(--muted-foreground));
+}
+
+.details dd {
+  margin: 0;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  overflow-wrap: anywhere;
+}
+
+.details button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  border: 0;
+  background: none;
+  padding: 0.25rem;
+  line-height: 1;
+  color: hsl(var(--muted-foreground));
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 2px;
+  flex: none;
+}
+
+.tally {
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.warning {
+  margin-top: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+  border: 1px solid hsl(38 92% 50% / 0.35);
+  background: hsl(38 92% 50% / 0.1);
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.warning[hidden] {
+  display: none;
+}

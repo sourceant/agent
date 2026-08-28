@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/sourceant/agent/internal/core"
+	"github.com/sourceant/agent/internal/ui"
 )
 
 // Reader is the part of the core client this server needs.
@@ -62,6 +63,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("GET /api/repositories", s.repositories)
 	mux.HandleFunc("GET /api/graph", s.graph)
+	mux.Handle("GET /", ui.Handler())
 	return mux
 }
 
