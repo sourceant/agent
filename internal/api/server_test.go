@@ -1,0 +1,149 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/sourceant/agent/internal/core"
+)
+
+type stubReader struct {
+	up           bool
+	repositories []core.Repository
+	graph        core.Graph
+	err          error
+	askedFor     string
+	askedOptions core.GraphOptions
+}
+
+func (s *stubReader) Healthy(context.Context) bool { return s.up }
+
+func (s *stubReader) Repositories(context.Context) ([]core.Repository, error) {
+	return s.repositories, s.err
+}
+
+func (s *stubReader) Graph(_ context.Context, repository string, opts core.GraphOptions) (core.Graph, error) {
+	s.askedFor = repository
+	s.askedOptions = opts
+	return s.graph, s.err
+}
+
+type stubSupervisor struct {
+	starts int
+	exit   error
+}
+
+func (s stubSupervisor) Starts() int     { return s.starts }
+func (s stubSupervisor) LastExit() error { return s.exit }
+
+func call(t *testing.T, server *Server, target string) *httptest.ResponseRecorder {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
+	return recorder
+}
+
+func TestHealthReportsWhetherTheCoreIsAnswering(t *testing.T) {
+	server := New(&stubReader{up: true}, stubSupervisor{starts: 2}, "1.2.3", "http://127.0.0.1:8931")
+
+	response := call(t, server, "/health")
+
+	var status Status
+	decode(t, response, &status)
+	if !status.CoreUp {
+		t.Error("reported a core that answered as down")
+	}
+	if status.CoreStarts != 2 {
+		t.Errorf("got %d starts, want 2", status.CoreStarts)
+	}
+	if status.Version != "1.2.3" || status.CoreURL != "http://127.0.0.1:8931" {
+		t.Errorf("got version %q at %q, want what the agent was built with", status.Version, status.CoreURL)
+	}
+}
+
+func TestHealthCarriesWhyTheCoreLastDied(t *testing.T) {
+	server := New(&stubReader{}, stubSupervisor{starts: 9, exit: errors.New("exit status 1")}, "dev", "")
+
+	response := call(t, server, "/health")
+
+	var status Status
+	decode(t, response, &status)
+	if status.LastExit != "exit status 1" {
+		t.Errorf("got last exit %q, want what the process said", status.LastExit)
+	}
+}
+
+func TestAnEmptyRegistryIsAnEmptyListRatherThanNull(t *testing.T) {
+	server := New(&stubReader{repositories: nil}, stubSupervisor{}, "dev", "")
+
+	response := call(t, server, "/api/repositories")
+
+	if got := response.Body.String(); got != "[]\n" {
+		t.Errorf("got %q, want an empty list", got)
+	}
+}
+
+func TestGraphPassesOnWhatNarrowsADrawing(t *testing.T) {
+	reader := &stubReader{}
+	server := New(reader, stubSupervisor{}, "dev", "")
+
+	call(t, server, "/api/graph?repository=acme/billing&path_prefix=app/&include_tests=true&node_limit=200")
+
+	if reader.askedFor != "acme/billing" {
+		t.Errorf("asked for %q, want acme/billing", reader.askedFor)
+	}
+	want := core.GraphOptions{PathPrefix: "app/", IncludeTests: true, NodeLimit: 200}
+	if reader.askedOptions != want {
+		t.Errorf("asked with %+v, want %+v", reader.askedOptions, want)
+	}
+}
+
+func TestGraphRefusesToGuessWhichRepositoryIsMeant(t *testing.T) {
+	server := New(&stubReader{}, stubSupervisor{}, "dev", "")
+
+	response := call(t, server, "/api/graph")
+
+	if response.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", response.Code)
+	}
+}
+
+func TestAnUnregisteredRepositoryStaysA404(t *testing.T) {
+	reader := &stubReader{err: &core.Error{
+		StatusCode: http.StatusNotFound,
+		Detail:     "acme/nope is not registered on this machine",
+	}}
+	server := New(reader, stubSupervisor{}, "dev", "")
+
+	response := call(t, server, "/api/graph?repository=acme/nope")
+
+	if response.Code != http.StatusNotFound {
+		t.Errorf("got %d, want the core's own 404", response.Code)
+	}
+	var body problem
+	decode(t, response, &body)
+	if body.Error != "acme/nope is not registered on this machine" {
+		t.Errorf("got %q, want the reason the core gave", body.Error)
+	}
+}
+
+func TestACoreThatCannotBeReachedIsNotTheAgentBreaking(t *testing.T) {
+	server := New(&stubReader{err: errors.New("connection refused")}, stubSupervisor{}, "dev", "")
+
+	response := call(t, server, "/api/repositories")
+
+	if response.Code != http.StatusBadGateway {
+		t.Errorf("got %d, want 502", response.Code)
+	}
+}
+
+func decode(t *testing.T, response *httptest.ResponseRecorder, into any) {
+	t.Helper()
+	if err := json.Unmarshal(response.Body.Bytes(), into); err != nil {
+		t.Fatalf("decoding %q: %v", response.Body.String(), err)
+	}
+}
