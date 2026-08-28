@@ -8,7 +8,6 @@ import PageHead from '~/components/PageHead.vue'
 import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
-import { groupOf } from '~/lib/graph'
 
 const { repositories, error, fetchRepositories } = useRepositories()
 const counted = ref([])
@@ -29,7 +28,7 @@ onMounted(async () => {
     ])
     return {
       repository,
-      files: graph ? graph.nodes.filter((node) => groupOf(node) === 'file').length : 0,
+      files: graph ? graph.nodes.filter((node) => node.kind === 'file').length : 0,
       nodes: graph ? graph.nodes.length : 0,
       knowledge: knowledge ? knowledge.total : 0,
     }
@@ -89,8 +88,8 @@ onMounted(async () => {
       </div>
 
       <p class="mt-4 text-xs text-muted-foreground">
-        Reviews are not here. A review reads a pull request, which is a thing the hosted service
-        does; nothing on this machine produces one.
+        Reviews are not here. A review reads a pull request, and nothing on this machine
+        produces one.
       </p>
     </template>
   </div>

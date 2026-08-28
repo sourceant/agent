@@ -1,11 +1,7 @@
 import { ref } from 'vue'
 import { api } from '~/api'
 
-/** The code itself: what is defined, and what calls what.
- *
- * The same shape the hosted composable answers in, so the workbench drawing it
- * does not know which one it is talking to.
- */
+/** The code itself: what is defined, and what calls what. */
 export function useCodeGraph() {
   const graph = ref(null)
   const loading = ref(false)

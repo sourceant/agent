@@ -7,7 +7,6 @@ import PageHead from '~/components/PageHead.vue'
 import FolderPicker from '~/components/FolderPicker.vue'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
-import { groupOf } from '~/lib/graph'
 
 const { repositories, error, fetchRepositories } = useRepositories()
 const counts = ref({})
@@ -20,7 +19,7 @@ async function countAll() {
     counts.value = {
       ...counts.value,
       [repository.name]: graph
-        ? { files: graph.nodes.filter((node) => groupOf(node) === 'file').length, links: graph.links.length }
+        ? { files: graph.nodes.filter((node) => node.kind === 'file').length, links: graph.links.length }
         : null,
     }
   }

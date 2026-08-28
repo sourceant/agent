@@ -33,7 +33,6 @@ type Repository struct {
 
 // Node is one file, import or symbol in a repository's graph.
 //
-// The same shape the hosted graph is drawn from, so one renderer serves both.
 // Kind says what the thing is and never what it is written in: a file is a file
 // whatever its language. Degree is how many lines meet here, which is what
 // sizes it, and Community is which part of the repository it belongs to, which

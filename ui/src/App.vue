@@ -23,9 +23,8 @@ const route = useRoute()
 const menuOpen = ref(false)
 const userOpen = ref(false)
 
-/* The hosted navigation's names and order, for the parts a machine has.
- * Systems, Assistant, Inbox, Reviews, Lens, Triage and Analytics are all
- * hosted: each needs a workspace, a pull request, or another person. */
+/* What a machine has. Anything needing a pull request or another person is
+ * not here, because nothing on a machine produces one. */
 const navigation = [
   { name: 'Overview', href: '/', icon: LayoutDashboard },
   { name: 'Knowledge', href: '/knowledge', icon: BookOpen },

@@ -1,9 +1,7 @@
-/* The graph payload, which is the hosted one.
+/* What the agent answers with when asked for a graph.
  *
- * Copied from the dashboard rather than restated, because the local index now
- * answers in the same shape and the components drawing it are the same
- * components. Two definitions of one payload is how a renderer and the thing
- * feeding it drift apart.
+ * One definition, shared by the renderer and everything feeding it. Two of them
+ * is how a drawing and its data drift apart.
  */
 
 export interface GraphNode {
