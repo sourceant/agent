@@ -48,6 +48,16 @@ const working = ref(false)
 const lastRead = ref(null)
 const error = ref('')
 
+const figures = computed(() => [
+  { label: 'Files', value: counts.value?.files ?? 0, icon: FileCode },
+  { label: 'Connections', value: counts.value?.links ?? 0, icon: Link2 },
+  { label: 'Parts', value: counts.value?.parts?.length ?? 0, icon: Network },
+  { label: 'Recorded', value: knowledge.value.length, icon: BookOpen },
+  { label: 'Rules', value: skills.value.length, icon: ScrollText },
+])
+
+const biggestPart = computed(() => counts.value?.parts?.[0]?.size || 1)
+
 const tabs = computed(() => [
   { id: 'overview', label: 'Overview' },
   { id: 'knowledge', label: `Knowledge${knowledge.value.length ? ` ${knowledge.value.length}` : ''}` },
@@ -68,7 +78,9 @@ async function load() {
     ? {
         files: graph.nodes.filter((node) => node.kind === 'file').length,
         links: graph.links.length,
-        parts: graph.communities ?? 0,
+        // Each part is named after what it holds, which is more use than
+        // counting them.
+        parts: [...(graph.communities ?? [])].sort((a, b) => b.size - a.size),
       }
     : null
   knowledge.value = recorded.items ?? []
@@ -139,38 +151,26 @@ onMounted(async () => {
 
     <Tabs v-model="tab" :tabs="tabs" label="What to look at" class="mb-4 w-fit" />
 
-    <div v-if="tab === 'overview'" class="grid gap-3 sm:grid-cols-3">
+    <div v-if="tab === 'overview'" class="space-y-3">
       <UiCard class="p-5">
-        <p class="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-          <FileCode class="h-3.5 w-3.5" />Files
-        </p>
-        <p class="mt-1 text-2xl font-semibold">{{ (counts?.files ?? 0).toLocaleString() }}</p>
-      </UiCard>
-      <UiCard class="p-5">
-        <p class="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-          <Link2 class="h-3.5 w-3.5" />Connections
-        </p>
-        <p class="mt-1 text-2xl font-semibold">{{ (counts?.links ?? 0).toLocaleString() }}</p>
-      </UiCard>
-      <UiCard class="p-5">
-        <p class="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-          <Network class="h-3.5 w-3.5" />Parts
-        </p>
-        <p class="mt-1 text-2xl font-semibold">{{ (counts?.parts ?? 0).toLocaleString() }}</p>
-      </UiCard>
+        <dl class="flex flex-wrap gap-x-8 gap-y-3">
+          <div v-for="figure in figures" :key="figure.label">
+            <dt class="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+              <component :is="figure.icon" class="h-3.5 w-3.5" />{{ figure.label }}
+            </dt>
+            <dd class="mt-0.5 text-lg font-semibold">{{ figure.value.toLocaleString() }}</dd>
+          </div>
+        </dl>
 
-      <UiCard class="p-5 sm:col-span-3">
-        <p v-if="lastRead" class="text-sm text-primary">
+        <p v-if="lastRead" class="mt-4 text-sm text-primary">
           <template v-if="lastRead.indexed">Read {{ lastRead.indexed.toLocaleString() }} files just now.</template>
           <template v-else>Nothing had changed.</template>
         </p>
-        <p v-else-if="counts === null" class="text-sm text-muted-foreground">
+        <p v-else-if="counts === null" class="mt-4 text-sm text-muted-foreground">
           Not read yet. Re-index to read it.
         </p>
-        <p v-else class="text-sm text-muted-foreground">
-          Everything on this page comes off this folder. Nothing about it has left this machine.
-        </p>
-        <div class="mt-3 flex flex-wrap gap-2">
+
+        <div class="mt-4 flex flex-wrap gap-2">
           <UiButton variant="outline" size="sm" @click="router.push('/reviews')">
             <ShieldCheck class="mr-1.5 h-3.5 w-3.5" />
             Review what has changed
@@ -180,6 +180,32 @@ onMounted(async () => {
             Record something
           </UiButton>
         </div>
+      </UiCard>
+
+      <UiCard v-if="counts?.parts?.length" class="p-5">
+        <h2 class="font-semibold">What it is made of</h2>
+        <p class="mb-4 mt-0.5 text-sm text-muted-foreground">
+          The parts the code falls into, named after what each one holds. Found by how tightly
+          the files in them refer to each other, not by which folder they sit in.
+        </p>
+        <ul class="space-y-1.5">
+          <li v-for="part in counts.parts" :key="part.id" class="flex items-center gap-3">
+            <span class="w-40 shrink-0 truncate text-sm font-medium">{{ part.name }}</span>
+            <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <span
+                class="block h-full rounded-full bg-pillar-graph"
+                :style="{ width: `${Math.max(2, (part.size / biggestPart) * 100)}%` }"
+              />
+            </span>
+            <span class="w-16 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+              {{ part.size.toLocaleString() }}
+            </span>
+          </li>
+        </ul>
+        <UiButton class="mt-4" variant="outline" size="sm" @click="tab = 'graph'">
+          <Network class="mr-1.5 h-3.5 w-3.5" />
+          See them drawn
+        </UiButton>
       </UiCard>
     </div>
 

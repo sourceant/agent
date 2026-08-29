@@ -19,7 +19,7 @@ onMounted(fetchRepositories)
     <PageHead title="Graphs" sub="Your code, and how it holds together.">
       <template #icon><Network class="h-6 w-6" /></template>
       <template #actions>
-        <Select v-if="repositories.length > 1" v-model="chosen" aria-label="Repository">
+        <Select v-if="repositories.length > 1" v-model="chosen" size="sm" aria-label="Repository">
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
           </option>

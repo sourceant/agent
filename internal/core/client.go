@@ -373,11 +373,24 @@ type Recorded struct {
 	Summary string `json:"summary"`
 }
 
+// Where is the checkout a review read, and what it was compared against.
+//
+// A person with a worktree open somewhere else is otherwise left wondering
+// whose work they are looking at.
+type Where struct {
+	Path    string `json:"path"`
+	Branch  string `json:"branch"`
+	Against string `json:"against"`
+	Base    string `json:"base"`
+	Commits int    `json:"commits"`
+}
+
 // Review is whether a checkout's work is ready to be proposed to anyone.
 type Review struct {
 	Ready     bool          `json:"ready"`
 	Note      string        `json:"note"`
 	Base      string        `json:"base"`
+	Where     Where         `json:"where"`
 	Changed   []ChangedFile `json:"changed"`
 	Skills    []Skill       `json:"skills"`
 	Knowledge []Recorded    `json:"knowledge"`

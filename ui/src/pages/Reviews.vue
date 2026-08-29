@@ -111,17 +111,18 @@ onMounted(async () => {
     >
       <template #icon><ShieldCheck class="h-6 w-6" /></template>
       <template #actions>
-        <Select v-if="repositories.length > 1" v-model="chosen" aria-label="Repository">
+        <Select v-if="repositories.length > 1" v-model="chosen" size="sm" aria-label="Repository">
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
           </option>
         </Select>
-        <UiButton v-if="repositories.length" variant="outline" :disabled="running" @click="run(false)">
+        <UiButton v-if="repositories.length" size="sm" variant="outline" :disabled="running" @click="run(false)">
           <Loader2 v-if="running" class="mr-2 h-4 w-4 animate-spin" />
           <FileCode v-else class="mr-2 h-4 w-4" />
           {{ running ? 'Reading…' : 'Read what changed' }}
         </UiButton>
         <UiButton
+          size="sm"
           v-if="repositories.length && hasModel"
           variant="glow"
           :disabled="judging"
@@ -190,6 +191,25 @@ onMounted(async () => {
               · {{ advisory.length }} suggestion{{ advisory.length === 1 ? '' : 's' }}
             </template>
           </span>
+
+          <!-- Which checkout, on which branch, against what. Somebody with a
+               worktree open elsewhere is otherwise left wondering whose work
+               this is. -->
+          <p v-if="result.where" class="w-full border-t pt-3 text-xs text-muted-foreground">
+            <span class="font-mono">{{ result.where.path }}</span>
+            <template v-if="result.where.branch">
+              · on <span class="font-mono">{{ result.where.branch }}</span>
+            </template>
+            <template v-if="result.where.against">
+              · against <span class="font-mono">{{ result.where.against }}</span>
+            </template>
+            ·
+            <template v-if="result.where.commits">
+              {{ result.where.commits }} commit{{ result.where.commits === 1 ? '' : 's' }} ahead,
+              plus what is uncommitted
+            </template>
+            <template v-else>nothing committed yet, so this is uncommitted work only</template>
+          </p>
         </UiCard>
 
         <Tabs v-model="view" :tabs="views" label="What to look at" class="mb-4" />

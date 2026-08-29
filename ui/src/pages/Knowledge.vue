@@ -131,12 +131,13 @@ onMounted(async () => {
     <PageHead pillar="memory" title="Knowledge" sub="The decisions, conventions and constraints behind this code.">
       <template #icon><Lightbulb class="h-6 w-6" /></template>
       <template #actions>
-        <Select v-if="repositories.length > 1" v-model="chosen" aria-label="Repository">
+        <Select v-if="repositories.length > 1" v-model="chosen" size="sm" aria-label="Repository">
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
           </option>
         </Select>
         <UiButton
+          size="sm"
           v-if="repositories.length"
           variant="outline"
           :disabled="reading"
@@ -147,6 +148,7 @@ onMounted(async () => {
           {{ reading ? 'Reading…' : 'Read what the repo states' }}
         </UiButton>
         <UiButton
+          size="sm"
           v-if="repositories.length && hasModel"
           variant="outline"
           :disabled="asking"
@@ -156,7 +158,7 @@ onMounted(async () => {
           <Wand2 v-else class="mr-2 h-4 w-4" />
           {{ asking ? 'Asking…' : 'Ask the model' }}
         </UiButton>
-        <UiButton v-if="repositories.length" variant="glow" @click="open(null)">
+        <UiButton v-if="repositories.length" size="sm" variant="glow" @click="open(null)">
           <Plus class="mr-2 h-4 w-4" />
           Record something
         </UiButton>

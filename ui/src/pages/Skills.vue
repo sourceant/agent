@@ -149,16 +149,16 @@ onMounted(async () => {
     >
       <template #icon><BookOpenCheck class="h-6 w-6" /></template>
       <template #actions>
-        <Select v-if="repositories.length > 1" v-model="chosen" aria-label="Repository">
+        <Select v-if="repositories.length > 1" v-model="chosen" size="sm" aria-label="Repository">
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
           </option>
         </Select>
         <div class="relative">
           <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input v-model="term" placeholder="Find a rule" class="w-48 pl-8" aria-label="Find a rule" />
+          <Input v-model="term" size="sm" placeholder="Find a rule" class="w-48 pl-8" aria-label="Find a rule" />
         </div>
-        <UiButton v-if="repositories.length" variant="glow" @click="compose(null)">
+        <UiButton v-if="repositories.length" size="sm" variant="glow" @click="compose(null)">
           <Plus class="mr-2 h-4 w-4" />
           Write one down
         </UiButton>
