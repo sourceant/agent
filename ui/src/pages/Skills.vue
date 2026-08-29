@@ -3,17 +3,15 @@ import {
   Badge as UiBadge,
   Button as UiButton,
   Card as UiCard,
-  Field,
   Input,
   ItemCard,
-  Modal as UiModal,
   PageHead,
   Select,
   Tabs,
-  Textarea,
 } from '@sourceant/design'
 import { computed, onMounted, ref, watch } from 'vue'
-import { BookOpenCheck, Copy, Eye, Pencil, Plus, ScrollText, Search, Trash2 } from 'lucide-vue-next'
+import { useRouter } from 'vue-router'
+import { BookOpenCheck, Plus, ScrollText, Search, Trash2 } from 'lucide-vue-next'
 import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
@@ -32,15 +30,11 @@ import { api } from '~/api'
 
 const MINE = 'repository'
 
+const router = useRouter()
 const { repositories, chosen, error, fetchRepositories } = useRepositories()
 const skills = ref([])
 const term = ref('')
 const where = ref('all')
-const reading = ref(null)
-const editing = ref(null)
-const draft = ref({ id: '', name: '', description: '', body: '' })
-const saving = ref(false)
-const problem = ref('')
 
 const wheres = [
   { id: 'all', label: 'All' },
@@ -71,55 +65,6 @@ async function load() {
   } catch (caught) {
     skills.value = []
     error.value = caught.message
-  }
-}
-
-async function open(skill) {
-  try {
-    reading.value = await api.skill(skill.id, chosen.value)
-  } catch (caught) {
-    error.value = caught.message
-  }
-}
-
-function compose(skill) {
-  problem.value = ''
-  if (!skill) {
-    editing.value = { fresh: true }
-    draft.value = { id: '', name: '', description: '', body: '' }
-    return
-  }
-  editing.value = { fresh: !ours(skill), from: skill }
-  draft.value = {
-    // Copying somebody's own rule into this repository gives it a new home and
-    // the same name, so the repository's copy is the one that gets used.
-    id: skill.id.split('/').pop(),
-    name: skill.name,
-    description: skill.description,
-    body: skill.body ?? '',
-  }
-}
-
-async function edit(skill) {
-  try {
-    compose(await api.skill(skill.id, chosen.value))
-  } catch (caught) {
-    error.value = caught.message
-  }
-}
-
-async function save() {
-  saving.value = true
-  problem.value = ''
-  try {
-    await api.recordSkill({ repository: chosen.value, ...draft.value })
-    editing.value = null
-    reading.value = null
-    await load()
-  } catch (caught) {
-    problem.value = caught.message
-  } finally {
-    saving.value = false
   }
 }
 
@@ -158,7 +103,7 @@ onMounted(async () => {
           <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input v-model="term" size="sm" placeholder="Find a rule" class="w-48 pl-8" aria-label="Find a rule" />
         </div>
-        <UiButton v-if="repositories.length" size="sm" variant="glow" @click="compose(null)">
+        <UiButton v-if="repositories.length" size="sm" variant="glow" @click="router.push('/skills/new')">
           <Plus class="mr-2 h-4 w-4" />
           Write one down
         </UiButton>
@@ -181,6 +126,9 @@ onMounted(async () => {
           :title="skill.name"
           :subtitle="skill.path"
           pillar="review"
+          hover
+          class="cursor-pointer"
+          @click="router.push(`/skills/${skill.id}`)"
         >
           <template #icon><ScrollText class="h-5 w-5" /></template>
           <template #badges>
@@ -190,23 +138,12 @@ onMounted(async () => {
           </template>
           <p class="text-sm text-muted-foreground">{{ skill.description }}</p>
           <template #actions>
-            <UiButton variant="ghost" size="icon" :aria-label="`Read ${skill.name}`" @click="open(skill)">
-              <Eye class="h-4 w-4" />
-            </UiButton>
-            <UiButton
-              variant="ghost"
-              size="icon"
-              :aria-label="ours(skill) ? `Edit ${skill.name}` : `Copy ${skill.name} into this repository`"
-              @click="edit(skill)"
-            >
-              <component :is="ours(skill) ? Pencil : Copy" class="h-4 w-4" />
-            </UiButton>
             <UiButton
               v-if="ours(skill)"
               variant="ghost"
               size="icon"
               :aria-label="`Forget ${skill.name}`"
-              @click="forget(skill)"
+              @click.stop="forget(skill)"
             >
               <Trash2 class="h-4 w-4" />
             </UiButton>
@@ -222,81 +159,11 @@ onMounted(async () => {
           <code class="font-mono">.sourceant/skills</code>, so the rest of the team gets them by
           pulling. Anything you already taught Claude or Codex is read from your own folders.
         </p>
-        <UiButton class="mt-4" variant="glow" @click="compose(null)">
+        <UiButton class="mt-4" variant="glow" @click="router.push('/skills/new')">
           <Plus class="mr-2 h-4 w-4" />
           Write one down
         </UiButton>
       </UiCard>
     </template>
-
-    <UiModal :open="!!reading" max-width="2xl" @close="reading = null">
-      <div v-if="reading">
-        <h2 class="pr-8 text-lg font-semibold">{{ reading.name }}</h2>
-        <p class="mt-1 text-sm text-muted-foreground">{{ reading.description }}</p>
-        <p class="mt-1 break-all font-mono text-xs text-muted-foreground">{{ reading.path }}</p>
-        <pre class="mt-4 max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 p-4 text-sm">{{ reading.body }}</pre>
-      </div>
-    </UiModal>
-
-    <UiModal :open="!!editing" max-width="2xl" @close="editing = null">
-      <div v-if="editing" class="space-y-4">
-        <div>
-          <h2 class="pr-8 text-lg font-semibold">
-            {{ editing.from ? (editing.fresh ? 'Copy it into this repository' : 'Edit this rule') : 'Write a rule down' }}
-          </h2>
-          <p class="mt-1 text-sm text-muted-foreground">
-            <template v-if="editing.fresh && editing.from">
-              This one is yours, kept wherever your coding agent keeps it, so it is not edited
-              here. Saved into <span class="font-mono">{{ chosen }}</span> it becomes the
-              team's, and the copy here is the one that gets used.
-            </template>
-            <template v-else>
-              It is saved into <span class="font-mono">{{ chosen }}</span> as a file, so the rest
-              of the team gets it by pulling and your coding agent reads it too.
-            </template>
-          </p>
-        </div>
-
-        <Field
-          label="Name"
-          for="skill-id"
-          hint="Lower case words joined by hyphens. It names the folder the rule is saved in."
-        >
-          <Input id="skill-id" v-model="draft.id" :readonly="!!editing.from && !editing.fresh" placeholder="retry-limit" />
-        </Field>
-
-        <Field
-          label="When it applies"
-          for="skill-description"
-          hint="One sentence. This is what decides whether a change gets read against this rule."
-        >
-          <Textarea
-            id="skill-description"
-            v-model="draft.description"
-            placeholder="Use when a change adds or edits a database migration."
-          />
-        </Field>
-
-        <Field label="What it requires" for="skill-body" hint="What somebody has to do, or not do.">
-          <Textarea
-            id="skill-body"
-            v-model="draft.body"
-            rows="8"
-            placeholder="Never edit a migration that has already run. Add a new one instead."
-          />
-        </Field>
-
-        <p v-if="problem" class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
-          {{ problem }}
-        </p>
-
-        <div class="flex justify-end gap-2">
-          <UiButton variant="ghost" @click="editing = null">Cancel</UiButton>
-          <UiButton :disabled="saving" @click="save">
-            {{ saving ? 'Saving…' : 'Save' }}
-          </UiButton>
-        </div>
-      </div>
-    </UiModal>
   </div>
 </template>

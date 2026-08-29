@@ -7,6 +7,7 @@ import Knowledge from '~/pages/Knowledge.vue'
 import Repositories from '~/pages/Repositories.vue'
 import Repository from '~/pages/Repository.vue'
 import Reviews from '~/pages/Reviews.vue'
+import Skill from '~/pages/Skill.vue'
 import Skills from '~/pages/Skills.vue'
 import SettingsPage from '~/pages/Settings.vue'
 import '@sourceant/design/tokens.css'
@@ -21,6 +22,8 @@ const router = createRouter({
     { path: '/knowledge', component: Knowledge },
     { path: '/reviews', component: Reviews },
     { path: '/skills', component: Skills },
+    // A rule kept in a nested folder has a slash in its name.
+    { path: '/skills/:id(.*)', component: Skill },
     { path: '/repositories', component: Repositories },
     // A name has a slash in it, so the whole tail is the name.
     { path: '/repositories/:name(.*)', component: Repository },
