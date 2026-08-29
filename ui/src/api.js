@@ -45,10 +45,10 @@ export const api = {
 
   /* Reading what a repository already states. Asking without recording is the
    * safe half, so a person can see what would be written before it is. */
-  initialize: (repository, dryRun = false) =>
+  initialize: (repository, { dryRun = false, useModel = false } = {}) =>
     call('/api/knowledge/initialize', {
       method: 'POST',
-      body: JSON.stringify({ repository, dry_run: dryRun }),
+      body: JSON.stringify({ repository, dry_run: dryRun, use_model: useModel }),
     }),
 
   settings: () => call('/api/settings'),

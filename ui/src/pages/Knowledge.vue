@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
-import { Lightbulb, Plus, Pencil, Trash2, Check, Sparkles, Loader2 } from 'lucide-vue-next'
+import { Lightbulb, Plus, Pencil, Trash2, Check, Sparkles, Loader2, Wand2 } from 'lucide-vue-next'
 import { Card as UiCard } from '@sourceant/design'
 import { Button as UiButton } from '@sourceant/design'
 import { Badge as UiBadge } from '@sourceant/design'
@@ -19,24 +19,40 @@ const draft = ref({ id: '', kind: 'decision', summary: '', why: '' })
 const problem = ref('')
 const saving = ref(false)
 const reading = ref(false)
+const asking = ref(false)
 const readOff = ref(null)
+const hasModel = ref(false)
+
+// Asking costs whatever the model costs, so it is only offered where there is
+// one to ask.
+async function checkModel() {
+  try {
+    const settings = await api.settings()
+    const name = settings.find((s) => s.key === 'model.name')
+    const key = settings.find((s) => s.key === 'model.api_key')
+    hasModel.value = !!name?.value && !!key?.is_set
+  } catch {
+    hasModel.value = false
+  }
+}
 
 /* What a repository already states about itself: decision records, conventions
  * and constraints in a contributing guide, rules written for whatever works on
  * it. It is knowledge already, just nowhere a tool can reach. Nothing is judged
  * or summarised, so it all arrives proposed. */
-async function initialize() {
-  reading.value = true
+async function initialize(useModel = false) {
+  const flag = useModel ? asking : reading
+  flag.value = true
   readOff.value = null
   try {
-    const found = await api.initialize(chosen.value)
+    const found = await api.initialize(chosen.value, { useModel })
     readOff.value = found.recorded
     error.value = ''
     await load()
   } catch (caught) {
     error.value = caught.message
   } finally {
-    reading.value = false
+    flag.value = false
   }
 }
 
@@ -99,7 +115,7 @@ async function forget(item) {
 watch(chosen, load)
 onMounted(async () => {
   await fetchRepositories()
-  await load()
+  await Promise.all([load(), checkModel()])
 })
 </script>
 
@@ -131,6 +147,16 @@ onMounted(async () => {
           <Loader2 v-if="reading" class="mr-2 h-4 w-4 animate-spin" />
           <Sparkles v-else class="mr-2 h-4 w-4" />
           {{ reading ? 'Reading…' : 'Read what the repo states' }}
+        </UiButton>
+        <UiButton
+          v-if="repositories.length && hasModel"
+          variant="outline"
+          :disabled="asking"
+          @click="initialize(true)"
+        >
+          <Loader2 v-if="asking" class="mr-2 h-4 w-4 animate-spin" />
+          <Wand2 v-else class="mr-2 h-4 w-4" />
+          {{ asking ? 'Asking…' : 'Ask the model' }}
         </UiButton>
         <UiButton v-if="repositories.length" variant="glow" @click="open(null)">
           <Plus class="mr-2 h-4 w-4" />
