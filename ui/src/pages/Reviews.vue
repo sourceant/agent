@@ -128,6 +128,10 @@ const VERDICTS = {
 }
 const verdict = computed(() => VERDICTS[read.value?.verdict] ?? null)
 
+// The rules this change does not meet. What it does meet is the ordinary case
+// and needs no announcement.
+const unmet = computed(() => verdicts.value.filter((one) => !one.passed))
+
 const tabs = computed(() => [
   { id: 'overview', label: 'Overview' },
   {
@@ -312,38 +316,6 @@ onMounted(async () => {
 
     <Notice v-if="error" tone="danger" class="mb-4">{{ error }}</Notice>
 
-    <!-- What it is read against. Whatever applied comes back here after a
-         review, so taking one off and running again is the obvious next move
-         rather than a form to fill in. -->
-    <UiCard v-if="repositories.length" class="mb-3 flex flex-wrap items-center gap-2 p-3">
-      <span class="text-xs uppercase tracking-wider text-muted-foreground">Read against</span>
-
-      <Chip
-        v-for="id in picked"
-        :key="id"
-        removable
-        :label="nameOf(id)"
-        :tone="verdictFor(id) === undefined ? 'default' : verdictFor(id) ? 'success' : 'danger'"
-        @remove="drop(id)"
-      >
-        {{ nameOf(id) }}
-      </Chip>
-
-      <Chip v-if="!picked.length" tone="muted">Whatever applies</Chip>
-
-      <Select
-        v-if="spare.length"
-        :model-value="adding"
-        size="sm"
-        class="ml-auto"
-        aria-label="Add a skill"
-        @update:model-value="add"
-      >
-        <option value="">Add a skill…</option>
-        <option v-for="skill in spare" :key="skill.id" :value="skill.id">{{ skill.name }}</option>
-      </Select>
-    </UiCard>
-
     <EmptyMachine v-if="repositories.length === 0" />
 
     <template v-else>
@@ -419,6 +391,40 @@ onMounted(async () => {
       </template>
 
       <template v-else>
+        <Tabs v-model="tab" :tabs="tabs" label="What to look at" class="mb-3 w-fit" />
+
+    <!-- What it is read against. Whatever applied comes back here after a
+             review, so taking one off and running again is the obvious next move
+             rather than a form to fill in. -->
+        <UiCard v-if="repositories.length" class="mb-3 flex flex-wrap items-center gap-2 p-3">
+          <span class="text-xs uppercase tracking-wider text-muted-foreground">Read against</span>
+
+          <Chip
+            v-for="id in picked"
+            :key="id"
+            removable
+            :label="nameOf(id)"
+            :tone="verdictFor(id) === undefined ? 'default' : verdictFor(id) ? 'success' : 'danger'"
+            @remove="drop(id)"
+          >
+            {{ nameOf(id) }}
+          </Chip>
+
+          <Chip v-if="!picked.length" tone="muted">Whatever applies</Chip>
+
+          <Select
+            v-if="spare.length"
+            :model-value="adding"
+            size="sm"
+            class="ml-auto"
+            aria-label="Add a skill"
+            @update:model-value="add"
+          >
+            <option value="">Add a skill…</option>
+            <option v-for="skill in spare" :key="skill.id" :value="skill.id">{{ skill.name }}</option>
+          </Select>
+        </UiCard>
+
         <!-- What is being reviewed, against what, and how it went. -->
         <UiCard class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
           <component
@@ -451,30 +457,22 @@ onMounted(async () => {
           </span>
         </UiCard>
 
-        <UiCard v-if="verdicts.length" class="mb-3 p-4">
-          <p class="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
-            What each one made of it
+        <!-- Only the ones it does not meet. A row of chips saying six rules
+             were satisfied is not news; the one that was not is. -->
+        <UiCard v-if="unmet.length" class="mb-3 border-destructive/40 p-4">
+          <p class="mb-2 text-sm font-medium">
+            {{ unmet.length }} thing{{ unmet.length === 1 ? '' : 's' }} this team has written
+            down that the change does not meet
           </p>
-          <div class="flex flex-wrap gap-1.5">
-            <Chip
-              v-for="verdict in verdicts"
-              :key="verdict.skill"
-              :tone="verdict.passed ? 'success' : 'danger'"
-              :title="verdict.note"
-            >
-              <template #mark>
-                <component
-                  :is="verdict.passed ? Check : TriangleAlert"
-                  class="h-3 w-3 shrink-0"
-                  :class="verdict.passed ? 'text-success' : 'text-destructive'"
-                />
-              </template>
-              {{ verdict.skill }}
-              <span v-if="!verdict.passed" class="ml-1 opacity-70">
-                {{ verdict.findings.length }}
+          <ul class="space-y-1.5 text-sm">
+            <li v-for="verdict in unmet" :key="verdict.skill" class="flex gap-2">
+              <TriangleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+              <span class="min-w-0">
+                <span class="font-medium">{{ verdict.skill }}</span>
+                <span v-if="verdict.note" class="text-muted-foreground"> — {{ verdict.note }}</span>
               </span>
-            </Chip>
-          </div>
+            </li>
+          </ul>
         </UiCard>
 
         <Notice
@@ -487,7 +485,6 @@ onMounted(async () => {
           <span class="text-muted-foreground">— {{ one.skill }}</span>
         </Notice>
 
-        <Tabs v-model="tab" :tabs="tabs" label="What to look at" class="mb-3 w-fit" />
 
         <!-- The review, in the order somebody reads one. -->
         <div v-if="tab === 'overview'" class="min-h-0 flex-1 space-y-3 overflow-y-auto">
