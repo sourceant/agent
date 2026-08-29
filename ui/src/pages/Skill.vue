@@ -44,7 +44,7 @@ const id = computed(() => String(route.params.id ?? ''))
 const fresh = computed(() => id.value === NEW)
 
 const skill = ref(null)
-const draft = ref({ id: '', name: '', description: '', body: '' })
+const draft = ref({ id: '', name: '', description: '', body: '', paths: '', reviews: null })
 const scope = ref(REPOSITORY)
 const pane = ref('write')
 const saving = ref(false)
@@ -57,9 +57,23 @@ const panes = [
   { id: 'preview', label: 'Preview' },
 ]
 
+// Kept in the skill's own frontmatter, in the map the format sets aside for
+// whatever a client wants to record, so a skill carrying it stays portable.
+const choices = [
+  { id: null, label: 'When it looks relevant' },
+  { id: true, label: 'Always' },
+  { id: false, label: 'Never' },
+]
+
+const saying = computed(() => {
+  if (draft.value.reviews === true) return 'Read against every change here.'
+  if (draft.value.reviews === false) return 'Left out of reviews entirely.'
+  return 'Picked when what it says matches what a change touches.'
+})
+
 const scopes = computed(() => [
   { id: REPOSITORY, label: chosen.value || 'This repository' },
-  { id: MACHINE, label: 'This machine' },
+  { id: MACHINE, label: 'Global' },
 ])
 
 // A skill in a coding agent's own folder is read, never written. Saving makes a
@@ -73,7 +87,9 @@ const changed = computed(() => {
   return (
     draft.value.name !== skill.value.name ||
     draft.value.description !== skill.value.description ||
-    draft.value.body !== (skill.value.body ?? '')
+    draft.value.body !== (skill.value.body ?? '') ||
+    draft.value.paths !== (skill.value.paths ?? []).join('\n') ||
+    draft.value.reviews !== skill.value.reviews
   )
 })
 
@@ -81,7 +97,7 @@ const lines = computed(() => (draft.value.body ? draft.value.body.split('\n').le
 
 const savedInto = computed(() =>
   scope.value === MACHINE
-    ? 'Saved on this machine, so it applies wherever you are working.'
+    ? 'Saved on this machine, so it applies to every repository you work in.'
     : `Saved into ${chosen.value} as a file, so the team gets it by pulling.`,
 )
 
@@ -90,7 +106,7 @@ async function load() {
   problem.value = ''
   if (fresh.value) {
     skill.value = null
-    draft.value = { id: '', name: '', description: '', body: '' }
+    draft.value = { id: '', name: '', description: '', body: '', paths: '', reviews: null }
     scope.value = route.query.scope === MACHINE ? MACHINE : REPOSITORY
     loading.value = false
     return
@@ -104,6 +120,8 @@ async function load() {
       name: found.name,
       description: found.description,
       body: found.body ?? '',
+      paths: (found.paths ?? []).join('\n'),
+      reviews: found.reviews,
     }
   } catch (caught) {
     problem.value = caught.message
@@ -124,6 +142,8 @@ async function save() {
       name: draft.value.name || draft.value.id,
       description: draft.value.description,
       body: draft.value.body,
+      paths: draft.value.paths.split('\n').map((one) => one.trim()).filter(Boolean),
+      reviews: draft.value.reviews,
     })
     saved.value = true
     if (fresh.value || written.id !== id.value) {
@@ -139,7 +159,7 @@ async function save() {
 }
 
 async function forget() {
-  const from = scope.value === MACHINE ? 'this machine' : chosen.value
+  const from = scope.value === MACHINE ? 'global' : chosen.value
   if (!confirm(`Forget ${draft.value.name}?\n\nThe file is removed from ${from}.`)) return
   try {
     await api.forgetSkill(chosen.value, scope.value, id.value)
@@ -172,7 +192,7 @@ onMounted(async () => {
       <template #icon><ScrollText class="h-5 w-5" /></template>
       <template #badges>
         <UiBadge v-if="skill" :variant="theirs ? 'outline' : 'success'">
-          {{ theirs ? skill.origin : scope === MACHINE ? 'this machine' : 'this repository' }}
+          {{ theirs ? skill.origin : scope === MACHINE ? 'global' : 'this repository' }}
         </UiBadge>
       </template>
       <template #actions>
@@ -189,7 +209,7 @@ onMounted(async () => {
         <UiButton size="sm" :disabled="saving || !changed" @click="save">
           <Loader2 v-if="saving" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
           <component :is="copying ? Copy : Check" v-else class="mr-1.5 h-3.5 w-3.5" />
-          {{ copying ? `Save into ${scope === MACHINE ? 'this machine' : chosen}` : 'Save' }}
+          {{ copying ? `Save into ${scope === MACHINE ? 'global' : chosen}` : 'Save' }}
         </UiButton>
       </template>
     </PageHead>
@@ -227,7 +247,7 @@ onMounted(async () => {
           label="Where it belongs"
           for="skill-scope"
           :hint="scope === MACHINE
-            ? 'Kept on this machine, so it applies wherever you are working.'
+            ? 'Kept on this machine, so it applies to every repository you work in.'
             : 'Kept in the repository as a file, so the team gets it by pulling.'"
         >
           <Select
@@ -249,6 +269,38 @@ onMounted(async () => {
             v-model="draft.description"
             placeholder="Use when a change adds or edits a database migration."
           />
+        </Field>
+      </UiCard>
+
+      <UiCard class="mb-3 grid gap-4 p-5 lg:grid-cols-2">
+        <Field
+          label="Files it is about"
+          for="skill-paths"
+          hint="Globs, one to a line. Named here, a change is read against this only when it
+                touches one of them, whatever the wording says. Left empty, the wording decides."
+        >
+          <Textarea
+            id="skill-paths"
+            v-model="draft.paths"
+            rows="3"
+            class="font-mono"
+            placeholder="db/migrations/**&#10;**/*.sql"
+          />
+        </Field>
+
+        <Field label="Use in reviews" hint="Not everything you teach an agent is about judging a change.">
+          <div class="flex flex-wrap gap-1.5">
+            <UiButton
+              v-for="one in choices"
+              :key="String(one.id)"
+              size="sm"
+              :variant="draft.reviews === one.id ? 'default' : 'outline'"
+              @click="draft.reviews = one.id"
+            >
+              {{ one.label }}
+            </UiButton>
+          </div>
+          <p class="mt-2 text-xs text-muted-foreground">{{ saying }}</p>
         </Field>
       </UiCard>
 

@@ -41,7 +41,7 @@ const where = ref('all')
 const wheres = [
   { id: 'all', label: 'All' },
   { id: REPOSITORY, label: 'This repository' },
-  { id: MACHINE, label: 'This machine' },
+  { id: MACHINE, label: 'Global' },
   { id: 'agents', label: 'Your coding agents' },
 ]
 
@@ -61,7 +61,7 @@ const shown = computed(() => {
 
 const ours = (skill) => OURS.includes(skill.origin)
 const home = (skill) =>
-  skill.origin === MACHINE ? 'this machine' : skill.origin === REPOSITORY ? 'this repository' : skill.origin
+  skill.origin === MACHINE ? 'global' : skill.origin === REPOSITORY ? 'this repository' : skill.origin
 
 async function load() {
   try {
@@ -141,6 +141,12 @@ onMounted(async () => {
             <UiBadge :variant="ours(skill) ? 'success' : 'outline'">{{ home(skill) }}</UiBadge>
           </template>
           <p class="text-sm text-muted-foreground">{{ skill.description }}</p>
+          <template #meta>
+            <span v-if="skill.reviews === true" class="text-success">always in reviews</span>
+            <span v-else-if="skill.reviews === false">not used in reviews</span>
+            <span v-else-if="!skill.automatic">only when you invoke it</span>
+            <span v-if="skill.paths?.length" class="font-mono">{{ skill.paths.join(' ') }}</span>
+          </template>
           <template #actions>
             <UiButton
               v-if="ours(skill)"

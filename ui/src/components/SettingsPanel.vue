@@ -1,7 +1,14 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { Check, Loader2, RotateCcw } from 'lucide-vue-next'
-import { Badge as UiBadge, Button as UiButton, Field, Input, Select } from '@sourceant/design'
+import {
+  Badge as UiBadge,
+  Button as UiButton,
+  Field,
+  Input,
+  Select,
+  Textarea,
+} from '@sourceant/design'
 import { api } from '~/api'
 
 /* One group of settings, drawn from what the core says it has.
@@ -143,6 +150,15 @@ onMounted(load)
           >
           <span class="text-muted-foreground">{{ draft[setting.key] ? 'On' : 'Off' }}</span>
         </label>
+
+        <Textarea
+          v-else-if="setting.multiline"
+          :id="setting.key"
+          v-model="draft[setting.key]"
+          rows="4"
+          class="font-mono"
+          :placeholder="String(setting.default ?? '')"
+        />
 
         <Input
           v-else

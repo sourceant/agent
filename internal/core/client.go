@@ -294,14 +294,22 @@ func (c *Client) Initialize(ctx context.Context, repository string, dryRun, useM
 	})
 }
 
-// Skill is one rule a team wrote down for whatever reads their code.
+// Skill is one thing a team wrote down about how work here is done.
+//
+// Paths, Reviews and Automatic are what the author stated in the skill's own
+// frontmatter: which files it is about, whether it belongs in a review, and
+// whether anything but a person may start it. Reviews is null where nobody
+// said, which is most of them and is not the same as saying no.
 type Skill struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Origin      string `json:"origin"`
-	Path        string `json:"path"`
-	Body        string `json:"body,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Origin      string   `json:"origin"`
+	Path        string   `json:"path"`
+	Paths       []string `json:"paths"`
+	Reviews     *bool    `json:"reviews"`
+	Automatic   bool     `json:"automatic"`
+	Body        string   `json:"body,omitempty"`
 }
 
 // SkillPage is the skills on hand.
@@ -310,9 +318,16 @@ type SkillPage struct {
 	Total  int     `json:"total"`
 }
 
-// Skills is every rule this machine and this repository hold.
+// Skills is everything this machine and this repository hold.
+//
+// All of them: a person with a folder per coding agent easily has a hundred,
+// and a screen that silently showed the first fifty would be lying about what
+// a review had to choose from.
 func (c *Client) Skills(ctx context.Context, repository string) (SkillPage, error) {
-	return get[SkillPage](ctx, c, "/api/skills", url.Values{"repository": {repository}})
+	return get[SkillPage](ctx, c, "/api/skills", url.Values{
+		"repository": {repository},
+		"limit":      {"500"},
+	})
 }
 
 // Skill is one rule in full, so a person can read what a check was made against.
@@ -325,12 +340,14 @@ func (c *Client) Skill(ctx context.Context, id, repository string) (Skill, error
 // Scope is "repository" for something about one project, which the team then
 // gets by pulling, or "machine" for something somebody wants everywhere.
 type Stated struct {
-	ID          string `json:"id"`
-	Repository  string `json:"repository"`
-	Scope       string `json:"scope"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Body        string `json:"body"`
+	ID          string   `json:"id"`
+	Repository  string   `json:"repository"`
+	Scope       string   `json:"scope"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Body        string   `json:"body"`
+	Paths       []string `json:"paths"`
+	Reviews     *bool    `json:"reviews"`
 }
 
 // RecordSkill writes a skill down, in a repository or on this machine.
@@ -341,6 +358,9 @@ type Stated struct {
 func (c *Client) RecordSkill(ctx context.Context, stated Stated) (Skill, error) {
 	if stated.Scope == "" {
 		stated.Scope = "repository"
+	}
+	if stated.Paths == nil {
+		stated.Paths = []string{}
 	}
 	return send[Skill](ctx, c, http.MethodPut, "/api/skills", nil, stated)
 }
@@ -448,7 +468,9 @@ type Setting struct {
 	Choices     []string `json:"choices"`
 	Group       string   `json:"group"`
 	Secret      bool     `json:"secret"`
-	IsSet       *bool    `json:"is_set"`
+	// Multiline is a list of things, one to a line, so a screen gives it room.
+	Multiline bool  `json:"multiline"`
+	IsSet     *bool `json:"is_set"`
 }
 
 // Settings is everything configurable on this machine.

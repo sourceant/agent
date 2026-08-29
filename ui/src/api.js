@@ -59,7 +59,10 @@ export const api = {
    * it by pulling, or the machine, for what somebody wants everywhere. What
    * sits in a coding agent's own folders is read and never written. */
   recordSkill: (skill) =>
-    call('/api/skills', { method: 'PUT', body: JSON.stringify({ scope: 'repository', ...skill }) }),
+    call('/api/skills', {
+      method: 'PUT',
+      body: JSON.stringify({ scope: 'repository', paths: [], reviews: null, ...skill }),
+    }),
   forgetSkill: (repository, scope, id) =>
     call(`/api/skills?${query({ repository, scope, id })}`, { method: 'DELETE' }),
 
