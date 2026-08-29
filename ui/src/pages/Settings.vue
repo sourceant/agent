@@ -1,9 +1,9 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { Settings as SettingsIcon, Sun, Moon } from 'lucide-vue-next'
-import UiCard from '~/components/ui/Card.vue'
-import UiButton from '~/components/ui/Button.vue'
-import UiBadge from '~/components/ui/Badge.vue'
+import { Card as UiCard } from '@sourceant/design'
+import { Button as UiButton } from '@sourceant/design'
+import { Badge as UiBadge } from '@sourceant/design'
 import PageHead from '~/components/PageHead.vue'
 import { useTheme } from '~/composables/useTheme'
 import { api } from '~/api'

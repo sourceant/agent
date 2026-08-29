@@ -10,6 +10,9 @@ export default defineConfig({
   resolve: {
     alias: { '~': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  // The design package ships source rather than a build, so it is compiled with
+  // the app instead of pre-bundled as a dependency.
+  optimizeDeps: { exclude: ['@sourceant/design'] },
   build: {
     outDir: '../internal/ui/assets',
     emptyOutDir: true,

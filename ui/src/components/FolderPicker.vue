@@ -1,9 +1,9 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { Folder, ChevronUp, Plus, Loader2 } from 'lucide-vue-next'
-import UiModal from '~/components/ui/Modal.vue'
-import UiButton from '~/components/ui/Button.vue'
-import UiBadge from '~/components/ui/Badge.vue'
+import { Modal as UiModal } from '@sourceant/design'
+import { Button as UiButton } from '@sourceant/design'
+import { Badge as UiBadge } from '@sourceant/design'
 import { api } from '~/api'
 
 /* A browser will not tell a page the absolute path of a folder somebody picked:

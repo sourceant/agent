@@ -6,7 +6,7 @@ import Graph from '~/pages/Graph.vue'
 import Knowledge from '~/pages/Knowledge.vue'
 import Repositories from '~/pages/Repositories.vue'
 import SettingsPage from '~/pages/Settings.vue'
-import '~/assets/main.css'
+import '@sourceant/design/tokens.css'
 
 // Hash history, because the agent serves one file and knows nothing about
 // paths a router invented.

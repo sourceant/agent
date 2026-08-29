@@ -1,7 +1,7 @@
 <script setup>
 import { Plus } from 'lucide-vue-next'
-import UiCard from '~/components/ui/Card.vue'
-import UiButton from '~/components/ui/Button.vue'
+import { Card as UiCard } from '@sourceant/design'
+import { Button as UiButton } from '@sourceant/design'
 </script>
 
 <template>

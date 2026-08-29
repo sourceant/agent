@@ -1,8 +1,8 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { Boxes, Plus, Trash2, RefreshCw, FileCode, Link2, Folder, Loader2 } from 'lucide-vue-next'
-import UiCard from '~/components/ui/Card.vue'
-import UiButton from '~/components/ui/Button.vue'
+import { Card as UiCard } from '@sourceant/design'
+import { Button as UiButton } from '@sourceant/design'
 import PageHead from '~/components/PageHead.vue'
 import FolderPicker from '~/components/FolderPicker.vue'
 import { useRepositories } from '~/composables/useRepositories'

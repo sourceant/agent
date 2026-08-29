@@ -2,9 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { Crosshair, Network, Search, X } from 'lucide-vue-next'
 import type { KnowledgeGraphData } from '~/types'
-import KnowledgeGraph from '~/components/CodeGraph.vue'
+import { CodeGraph as KnowledgeGraph } from '@sourceant/design'
 import { useCodeGraph, useRepos } from '~/composables/useCodeGraph'
-import { useContextKinds } from '~/composables/useContextKinds'
+import { useContextKinds } from '@sourceant/design'
 
 /**
  * The graph, its controls and whatever reads what was picked on it.

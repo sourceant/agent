@@ -1,9 +1,9 @@
 <script setup>
 import { onMounted, ref, computed } from 'vue'
 import { LayoutDashboard, FileCode, Lightbulb, Folder } from 'lucide-vue-next'
-import UiCard from '~/components/ui/Card.vue'
-import UiBadge from '~/components/ui/Badge.vue'
-import UiButton from '~/components/ui/Button.vue'
+import { Card as UiCard } from '@sourceant/design'
+import { Badge as UiBadge } from '@sourceant/design'
+import { Button as UiButton } from '@sourceant/design'
 import PageHead from '~/components/PageHead.vue'
 import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'

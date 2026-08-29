@@ -14,8 +14,8 @@ import {
 } from 'lucide-vue-next'
 import { createAvatar } from '@dicebear/core'
 import { notionists } from '@dicebear/collection'
-import UiLogo from '~/components/ui/Logo.vue'
-import UiAvatar from '~/components/ui/Avatar.vue'
+import { Logo as UiLogo } from '@sourceant/design'
+import { Avatar as UiAvatar } from '@sourceant/design'
 import { useTheme } from '~/composables/useTheme'
 
 const { isDark, toggleTheme, restoreTheme } = useTheme()
