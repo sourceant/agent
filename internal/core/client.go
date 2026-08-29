@@ -417,10 +417,15 @@ type Verdict struct {
 	Findings []Finding `json:"findings"`
 }
 
-// ChangedFile is one file a checkout's work touches.
+// ChangedFile is one file a checkout's work touches, and what changed in it.
+//
+// The patch travels with the file rather than as one diff for the whole
+// change: a page shows somebody the file they are looking at, and a list of
+// names is not a review.
 type ChangedFile struct {
 	Path   string `json:"path"`
 	Change string `json:"change"`
+	Patch  string `json:"patch"`
 }
 
 // Recorded is one thing known about the repository being reviewed.
