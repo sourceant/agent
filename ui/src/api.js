@@ -32,6 +32,11 @@ export const api = {
       body: JSON.stringify({ repository, everything, update }),
     }),
 
+  /* Where recent change has landed on what the rest of the code leans on.
+   * Either fact alone says little; it is the overlap that is worth a person's
+   * time, and is also the shortest list of files worth reading first. */
+  attention: (repository) => call(`/api/attention?${query({ repository })}`),
+
   graph: (repository, { includeTests = false, pathPrefix = '' } = {}) =>
     call(`/api/graph?${query({ repository, include_tests: includeTests, path_prefix: pathPrefix })}`),
 

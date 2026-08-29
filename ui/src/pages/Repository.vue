@@ -45,6 +45,7 @@ const tab = ref('overview')
 const counts = ref(null)
 const knowledge = ref([])
 const skills = ref([])
+const attention = ref({ files: [], since: '' })
 const working = ref(false)
 const lastRead = ref(null)
 const error = ref('')
@@ -52,12 +53,13 @@ const error = ref('')
 const figures = computed(() => [
   { label: 'Files', value: counts.value?.files ?? 0, icon: FileCode },
   { label: 'Connections', value: counts.value?.links ?? 0, icon: Link2 },
-  { label: 'Parts', value: counts.value?.parts?.length ?? 0, icon: Network },
+  { label: 'Parts', value: counts.value?.parts ?? 0, icon: Network },
   { label: 'Recorded', value: knowledge.value.length, icon: BookOpen },
   { label: 'Rules', value: skills.value.length, icon: ScrollText },
 ])
 
-const biggestPart = computed(() => counts.value?.parts?.[0]?.size || 1)
+// The busiest file sets the scale the rest of the bars are drawn against.
+const busiest = computed(() => attention.value.files[0]?.changes || 1)
 
 const tabs = computed(() => [
   { id: 'overview', label: 'Overview' },
@@ -70,22 +72,22 @@ async function load() {
   if (!name.value) return
   // Choosing it here means the pages this links out to open on the same one.
   chosen.value = name.value
-  const [graph, recorded, rules] = await Promise.all([
+  const [graph, recorded, rules, worth] = await Promise.all([
     api.graph(name.value).catch(() => null),
     api.knowledge(name.value).catch(() => ({ items: [] })),
     api.skills(name.value).catch(() => ({ skills: [] })),
+    api.attention(name.value).catch(() => ({ files: [], since: '' })),
   ])
   counts.value = graph
     ? {
         files: graph.nodes.filter((node) => node.kind === 'file').length,
         links: graph.links.length,
-        // Each part is named after what it holds, which is more use than
-        // counting them.
-        parts: [...(graph.communities ?? [])].sort((a, b) => b.size - a.size),
+        parts: (graph.communities ?? []).length,
       }
     : null
   knowledge.value = recorded.items ?? []
   skills.value = rules.skills ?? []
+  attention.value = worth
 }
 
 async function reindex() {
@@ -183,31 +185,36 @@ onMounted(async () => {
         </div>
       </UiCard>
 
-      <UiCard v-if="counts?.parts?.length" class="p-5">
-        <h2 class="font-semibold">What it is made of</h2>
+      <UiCard v-if="attention.files.length" class="p-5">
+        <h2 class="font-semibold">Where to look first</h2>
         <p class="mb-4 mt-0.5 text-sm text-muted-foreground">
-          The parts the code falls into, named after what each one holds. Found by how tightly
-          the files in them refer to each other, not by which folder they sit in.
+          Files that have been changing in the last {{ attention.since }} and that the rest of the
+          code leans on. Either on its own says little: something everything imports and nobody
+          touches is settled, and something nothing imports that changes daily is a scratch pad.
+          Where they meet is where a change is most likely to catch somebody out, and is the
+          shortest list worth reading first.
         </p>
-        <ul class="space-y-1.5">
-          <li v-for="part in counts.parts" :key="part.id" class="flex items-center gap-3">
-            <span class="w-40 shrink-0 truncate text-sm font-medium">{{ part.name }}</span>
-            <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+        <ul class="space-y-2">
+          <li v-for="file in attention.files" :key="file.path" class="flex items-center gap-3">
+            <span class="min-w-0 flex-1 truncate font-mono text-sm" :title="file.path">
+              {{ file.path }}
+            </span>
+            <span class="hidden h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:block">
               <span
                 class="block h-full rounded-full bg-pillar-graph"
-                :style="{ width: `${Math.max(2, (part.size / biggestPart) * 100)}%` }"
+                :style="{ width: `${Math.max(4, (file.changes / busiest) * 100)}%` }"
               />
             </span>
-            <span class="w-16 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
-              {{ part.size.toLocaleString() }}
+            <span class="w-28 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+              {{ file.changes }} change{{ file.changes === 1 ? '' : 's' }}
+            </span>
+            <span class="w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+              {{ file.dependants }} depend{{ file.dependants === 1 ? 's' : '' }}
             </span>
           </li>
         </ul>
-        <UiButton class="mt-4" variant="outline" size="sm" @click="tab = 'graph'">
-          <Network class="mr-1.5 h-3.5 w-3.5" />
-          See them drawn
-        </UiButton>
       </UiCard>
+
     </div>
 
     <div v-else-if="tab === 'knowledge'" class="space-y-3">

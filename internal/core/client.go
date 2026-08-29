@@ -181,6 +181,32 @@ func (c *Client) Graph(ctx context.Context, repository string, opts GraphOptions
 	return get[Graph](ctx, c, "/api/code/graph", query)
 }
 
+// Worth is one file where recent change has landed on something the rest of
+// the code leans on.
+type Worth struct {
+	Path       string `json:"path"`
+	Dependants int    `json:"dependants"`
+	Changes    int    `json:"changes"`
+}
+
+// Attention is where a person's time goes furthest in a repository.
+type Attention struct {
+	Files []Worth `json:"files"`
+	// The window the change counts cover, so a screen need not invent one.
+	Since string `json:"since"`
+}
+
+// Attention is the files where recent change meets a central position.
+//
+// Either fact alone says little: something half the codebase imports and
+// nobody has touched is settled, and something nothing imports that changes
+// daily is a scratch pad. It is the overlap that is worth somebody's time.
+func (c *Client) Attention(ctx context.Context, repository string) (Attention, error) {
+	return get[Attention](ctx, c, "/api/code/attention", url.Values{
+		"repository": {repository},
+	})
+}
+
 // Register covers one more directory, so the next index run reads it too.
 func (c *Client) Register(ctx context.Context, path, name string) (Repository, error) {
 	return send[Repository](ctx, c, http.MethodPost, "/api/code/repositories", nil, map[string]string{

@@ -24,6 +24,7 @@ type Reader interface {
 	Healthy(ctx context.Context) bool
 	Repositories(ctx context.Context) ([]core.Repository, error)
 	Graph(ctx context.Context, repository string, opts core.GraphOptions) (core.Graph, error)
+	Attention(ctx context.Context, repository string) (core.Attention, error)
 	Register(ctx context.Context, path, name string) (core.Repository, error)
 	Forget(ctx context.Context, path string) error
 	Index(ctx context.Context, repository string, everything, update bool) ([]core.Indexed, error)
@@ -90,6 +91,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/repositories", s.dropRepository)
 	mux.HandleFunc("POST /api/index", s.index)
 	mux.HandleFunc("GET /api/graph", s.graph)
+	mux.HandleFunc("GET /api/attention", s.attention)
 	mux.HandleFunc("GET /api/knowledge", s.knowledge)
 	mux.HandleFunc("PUT /api/knowledge", s.recordKnowledge)
 	mux.HandleFunc("DELETE /api/knowledge", s.forgetKnowledge)
@@ -156,6 +158,25 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, http.StatusOK, graph)
+}
+
+func (s *Server) attention(w http.ResponseWriter, r *http.Request) {
+	repository := r.URL.Query().Get("repository")
+	if repository == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a repository"})
+		return
+	}
+	found, err := s.reader.Attention(r.Context(), repository)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	// A repository with no recent history is an empty list, never a null, so a
+	// screen can say "nothing yet" without special-casing the absent case.
+	if found.Files == nil {
+		found.Files = []core.Worth{}
+	}
+	write(w, http.StatusOK, found)
 }
 
 func (s *Server) addRepository(w http.ResponseWriter, r *http.Request) {

@@ -15,6 +15,7 @@ type stubReader struct {
 	up              bool
 	repositories    []core.Repository
 	graph           core.Graph
+	attention       core.Attention
 	indexed         []core.Indexed
 	knowledge       core.KnowledgePage
 	err             error
@@ -48,6 +49,11 @@ func (s *stubReader) Graph(_ context.Context, repository string, opts core.Graph
 	s.askedFor = repository
 	s.askedOptions = opts
 	return s.graph, s.err
+}
+
+func (s *stubReader) Attention(_ context.Context, repository string) (core.Attention, error) {
+	s.askedFor = repository
+	return s.attention, s.err
 }
 
 func (s *stubReader) Register(_ context.Context, path, name string) (core.Repository, error) {
