@@ -138,6 +138,10 @@ func (c Core) Serve(port int) (string, []string, error) {
 		}
 		if c.Mount != "" {
 			args = append(args, "-v", c.Mount+":"+c.Mount)
+			// The image has a home of its own, and nothing a person taught
+			// their coding agent is in it. What the person keeps in theirs is
+			// only readable if the container is told where theirs is.
+			args = append(args, "-e", "SOURCEANT_MACHINE_HOME="+c.Mount)
 		}
 		if c.User != "" {
 			args = append(args, "--user", c.User)

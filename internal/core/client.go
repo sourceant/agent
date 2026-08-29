@@ -247,12 +247,101 @@ type Seeded struct {
 // Initialize records what a repository already states about itself.
 //
 // Asking without recording is the safe half, so a person can see what would be
-// written before any of it is.
-func (c *Client) Initialize(ctx context.Context, repository string, dryRun bool) (Seeded, error) {
+// written before any of it is. Asking a model as well finds what nobody wrote
+// down, and costs whatever the machine's own model costs.
+func (c *Client) Initialize(ctx context.Context, repository string, dryRun, useModel bool) (Seeded, error) {
 	return send[Seeded](ctx, c, http.MethodPost, "/api/knowledge/initialize", nil, map[string]any{
 		"repository": repository,
 		"dry_run":    dryRun,
+		"use_model":  useModel,
 	})
+}
+
+// Skill is one rule a team wrote down for whatever reads their code.
+type Skill struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Origin      string `json:"origin"`
+	Path        string `json:"path"`
+	Body        string `json:"body,omitempty"`
+}
+
+// SkillPage is the skills on hand.
+type SkillPage struct {
+	Skills []Skill `json:"skills"`
+	Total  int     `json:"total"`
+}
+
+// Skills is every rule this machine and this repository hold.
+func (c *Client) Skills(ctx context.Context, repository string) (SkillPage, error) {
+	return get[SkillPage](ctx, c, "/api/skills", url.Values{"repository": {repository}})
+}
+
+// Skill is one rule in full, so a person can read what a check was made against.
+func (c *Client) Skill(ctx context.Context, id, repository string) (Skill, error) {
+	return get[Skill](ctx, c, "/api/skills/"+id, url.Values{"repository": {repository}})
+}
+
+// Finding is one thing a rule says is wrong with a change.
+type Finding struct {
+	Detail   string `json:"detail"`
+	Severity string `json:"severity"`
+	Path     string `json:"path"`
+	Line     *int   `json:"line"`
+}
+
+// Verdict is what one rule made of a change.
+type Verdict struct {
+	Skill    string    `json:"skill"`
+	Passed   bool      `json:"passed"`
+	Note     string    `json:"note"`
+	Findings []Finding `json:"findings"`
+}
+
+// ChangedFile is one file a checkout's work touches.
+type ChangedFile struct {
+	Path   string `json:"path"`
+	Change string `json:"change"`
+}
+
+// Recorded is one thing known about the repository being reviewed.
+type Recorded struct {
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
+	Summary string `json:"summary"`
+}
+
+// Review is whether a checkout's work is ready to be proposed to anyone.
+type Review struct {
+	Ready     bool          `json:"ready"`
+	Note      string        `json:"note"`
+	Base      string        `json:"base"`
+	Changed   []ChangedFile `json:"changed"`
+	Skills    []Skill       `json:"skills"`
+	Knowledge []Recorded    `json:"knowledge"`
+	Verdicts  []Verdict     `json:"verdicts"`
+}
+
+// Ask is what to review and how.
+type Ask struct {
+	Repository  string   `json:"repository"`
+	Against     string   `json:"against"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Skills      []string `json:"skills"`
+	UseModel    bool     `json:"use_model"`
+}
+
+// Review reads a checkout's own work and says whether it is ready.
+//
+// Nothing here reaches a forge: the work being judged has not been proposed to
+// anyone yet, which is the point of judging it now.
+func (c *Client) Review(ctx context.Context, ask Ask) (Review, error) {
+	if ask.Skills == nil {
+		ask.Skills = []string{}
+	}
+	return send[Review](ctx, c, http.MethodPost, "/api/local/reviews", nil, ask)
 }
 
 // Setting is one thing configurable on this machine.

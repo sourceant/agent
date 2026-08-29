@@ -6,7 +6,9 @@ import {
   LayoutDashboard,
   Network,
   BookOpen,
+  BookOpenCheck,
   Boxes,
+  ShieldCheck,
   Settings,
   Sun,
   Moon,
@@ -23,12 +25,15 @@ const route = useRoute()
 const menuOpen = ref(false)
 const userOpen = ref(false)
 
-/* What a machine has. Anything needing a pull request or another person is
- * not here, because nothing on a machine produces one. */
+/* What a machine has. Anything needing another person to act is not here,
+ * because nothing on a machine produces one. Reviews are, because the work
+ * being read has not been proposed to anybody yet. */
 const navigation = [
   { name: 'Overview', href: '/', icon: LayoutDashboard },
   { name: 'Knowledge', href: '/knowledge', icon: BookOpen },
   { name: 'Graphs', href: '/graph', icon: Network },
+  { name: 'Reviews', href: '/reviews', icon: ShieldCheck },
+  { name: 'Skills', href: '/skills', icon: BookOpenCheck },
   { name: 'Repositories', href: '/repositories', icon: Boxes },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]

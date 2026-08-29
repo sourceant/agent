@@ -93,6 +93,9 @@ func TestTheDockerRuntimeBindsInsideAndPublishesOutside(t *testing.T) {
 		// At the same path on both sides, so one registry of absolute paths
 		// means the same thing whichever runtime reads it.
 		"-v /home/someone:/home/someone",
+		// The image has a home of its own, and nothing the person taught their
+		// coding agent is in it.
+		"-e SOURCEANT_MACHINE_HOME=/home/someone",
 		"--user 501:20",
 		"--entrypoint ./sourceant",
 		"ghcr.io/sourceant/sourceant:v1 serve",

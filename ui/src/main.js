@@ -5,6 +5,8 @@ import Overview from '~/pages/Overview.vue'
 import Graph from '~/pages/Graph.vue'
 import Knowledge from '~/pages/Knowledge.vue'
 import Repositories from '~/pages/Repositories.vue'
+import Reviews from '~/pages/Reviews.vue'
+import Skills from '~/pages/Skills.vue'
 import SettingsPage from '~/pages/Settings.vue'
 import '@sourceant/design/tokens.css'
 
@@ -16,6 +18,8 @@ const router = createRouter({
     { path: '/', component: Overview },
     { path: '/graph', component: Graph },
     { path: '/knowledge', component: Knowledge },
+    { path: '/reviews', component: Reviews },
+    { path: '/skills', component: Skills },
     { path: '/repositories', component: Repositories },
     { path: '/settings', component: SettingsPage },
     { path: '/:rest(.*)*', redirect: '/' },

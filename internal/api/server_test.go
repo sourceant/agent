@@ -23,7 +23,12 @@ type stubReader struct {
 	askedEverything bool
 	askedUpdate     bool
 	askedDryRun     bool
+	askedUseModel   bool
 	seeded          core.Seeded
+	skills          core.SkillPage
+	oneSkill        core.Skill
+	reviewed        core.Review
+	asked           core.Ask
 	settings        []core.Setting
 	setKey          string
 	setValue        any
@@ -78,10 +83,28 @@ func (s *stubReader) ForgetKnowledge(_ context.Context, repository, id string) e
 	return s.err
 }
 
-func (s *stubReader) Initialize(_ context.Context, repository string, dryRun bool) (core.Seeded, error) {
+func (s *stubReader) Initialize(_ context.Context, repository string, dryRun, useModel bool) (core.Seeded, error) {
 	s.askedFor = repository
 	s.askedDryRun = dryRun
+	s.askedUseModel = useModel
 	return s.seeded, s.err
+}
+
+func (s *stubReader) Skills(_ context.Context, repository string) (core.SkillPage, error) {
+	s.askedFor = repository
+	return s.skills, s.err
+}
+
+func (s *stubReader) Skill(_ context.Context, id, repository string) (core.Skill, error) {
+	s.askedFor = repository
+	s.forgot = id
+	return s.oneSkill, s.err
+}
+
+func (s *stubReader) Review(_ context.Context, ask core.Ask) (core.Review, error) {
+	s.asked = ask
+	s.askedFor = ask.Repository
+	return s.reviewed, s.err
 }
 
 func (s *stubReader) Settings(context.Context) ([]core.Setting, error) {

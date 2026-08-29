@@ -51,6 +51,20 @@ export const api = {
       body: JSON.stringify({ repository, dry_run: dryRun, use_model: useModel }),
     }),
 
+  /* The rules a team already wrote down for whatever reads their code, from
+   * this machine's agent folders and from the repository's own. */
+  skills: (repository = '') => call(`/api/skills?${query({ repository })}`),
+  skill: (id, repository = '') => call(`/api/skills/${id}?${query({ repository })}`),
+
+  /* Reading a checkout's own work before anybody else has been asked to. Asking
+   * without a model is the free half: what changed and which rules bear on it,
+   * with nothing judged. */
+  review: (repository, { against = '', title = '', description = '', skills = [], useModel = true } = {}) =>
+    call('/api/reviews', {
+      method: 'POST',
+      body: JSON.stringify({ repository, against, title, description, skills, use_model: useModel }),
+    }),
+
   settings: () => call('/api/settings'),
   setSetting: (key, value) =>
     call('/api/settings', { method: 'PUT', body: JSON.stringify({ key, value }) }),

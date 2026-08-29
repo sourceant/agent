@@ -30,7 +30,10 @@ type Reader interface {
 	Knowledge(ctx context.Context, repository string, limit, offset int) (core.KnowledgePage, error)
 	RecordKnowledge(ctx context.Context, repository string, item core.Knowledge) (core.Knowledge, error)
 	ForgetKnowledge(ctx context.Context, repository, id string) error
-	Initialize(ctx context.Context, repository string, dryRun bool) (core.Seeded, error)
+	Initialize(ctx context.Context, repository string, dryRun, useModel bool) (core.Seeded, error)
+	Skills(ctx context.Context, repository string) (core.SkillPage, error)
+	Skill(ctx context.Context, id, repository string) (core.Skill, error)
+	Review(ctx context.Context, ask core.Ask) (core.Review, error)
 	Settings(ctx context.Context) ([]core.Setting, error)
 	SetSetting(ctx context.Context, key string, value any) (core.Setting, error)
 }
@@ -82,6 +85,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/knowledge/initialize", s.initialize)
 	mux.HandleFunc("GET /api/settings", s.settings)
 	mux.HandleFunc("PUT /api/settings", s.setSetting)
+	mux.HandleFunc("GET /api/skills", s.skills)
+	mux.HandleFunc("GET /api/skills/{id...}", s.skill)
+	mux.HandleFunc("POST /api/reviews", s.review)
 	mux.HandleFunc("GET /api/browse", s.browse)
 	mux.Handle("GET /", ui.Handler())
 	return mux
@@ -249,6 +255,7 @@ func (s *Server) initialize(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Repository string `json:"repository"`
 		DryRun     bool   `json:"dry_run"`
+		UseModel   bool   `json:"use_model"`
 	}
 	if !readBody(w, r, &body) {
 		return
@@ -257,7 +264,7 @@ func (s *Server) initialize(w http.ResponseWriter, r *http.Request) {
 		write(w, http.StatusBadRequest, problem{Error: "name a repository"})
 		return
 	}
-	seeded, err := s.reader.Initialize(r.Context(), body.Repository, body.DryRun)
+	seeded, err := s.reader.Initialize(r.Context(), body.Repository, body.DryRun, body.UseModel)
 	if err != nil {
 		fail(w, err)
 		return
@@ -266,6 +273,63 @@ func (s *Server) initialize(w http.ResponseWriter, r *http.Request) {
 		seeded.Found = []core.Seed{}
 	}
 	write(w, http.StatusOK, seeded)
+}
+
+func (s *Server) skills(w http.ResponseWriter, r *http.Request) {
+	page, err := s.reader.Skills(r.Context(), r.URL.Query().Get("repository"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	// A machine with no skills folder is an empty list, never a null, so a
+	// screen can say "nothing yet" without special-casing the absent case.
+	if page.Skills == nil {
+		page.Skills = []core.Skill{}
+	}
+	write(w, http.StatusOK, page)
+}
+
+func (s *Server) skill(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if id == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a skill"})
+		return
+	}
+	found, err := s.reader.Skill(r.Context(), id, r.URL.Query().Get("repository"))
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, found)
+}
+
+func (s *Server) review(w http.ResponseWriter, r *http.Request) {
+	var ask core.Ask
+	if !readBody(w, r, &ask) {
+		return
+	}
+	if ask.Repository == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a repository"})
+		return
+	}
+	reviewed, err := s.reader.Review(r.Context(), ask)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if reviewed.Changed == nil {
+		reviewed.Changed = []core.ChangedFile{}
+	}
+	if reviewed.Skills == nil {
+		reviewed.Skills = []core.Skill{}
+	}
+	if reviewed.Knowledge == nil {
+		reviewed.Knowledge = []core.Recorded{}
+	}
+	if reviewed.Verdicts == nil {
+		reviewed.Verdicts = []core.Verdict{}
+	}
+	write(w, http.StatusOK, reviewed)
 }
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
