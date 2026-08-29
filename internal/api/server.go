@@ -36,7 +36,9 @@ type Reader interface {
 	Skill(ctx context.Context, id, repository string) (core.Skill, error)
 	RecordSkill(ctx context.Context, stated core.Stated) (core.Skill, error)
 	ForgetSkill(ctx context.Context, repository, scope, id string) error
-	Review(ctx context.Context, ask core.Ask) (core.Review, error)
+	Review(ctx context.Context, ask core.Ask) (core.Reading, error)
+	Reviewed(ctx context.Context, id string) (core.Reading, error)
+	Reviews(ctx context.Context, repository string) ([]core.Reading, error)
 	Settings(ctx context.Context) ([]core.Setting, error)
 	SetSetting(ctx context.Context, key string, value any) (core.Setting, error)
 	ResetSetting(ctx context.Context, key string) (core.Setting, error)
@@ -67,8 +69,6 @@ type Server struct {
 	supervisor Supervision
 	version    string
 	coreURL    string
-	// Reviews the agent is running, and the answers it is holding.
-	reviews *reviews
 }
 
 // New builds the agent's HTTP surface.
@@ -78,7 +78,6 @@ func New(reader Reader, supervisor Supervision, version, coreURL string) *Server
 		supervisor: supervisor,
 		version:    version,
 		coreURL:    coreURL,
-		reviews:    newReviews(),
 	}
 }
 
@@ -104,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/skills", s.recordSkill)
 	mux.HandleFunc("DELETE /api/skills", s.forgetSkill)
 	mux.HandleFunc("POST /api/reviews", s.review)
+	mux.HandleFunc("GET /api/reviews", s.listReviews)
 	mux.HandleFunc("GET /api/reviews/{id}", s.reviewed)
 	mux.HandleFunc("GET /api/browse", s.browse)
 	mux.Handle("GET /", ui.Handler())

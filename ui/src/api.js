@@ -84,6 +84,7 @@ export const api = {
       body: JSON.stringify({ repository, against, title, description, skills, use_model: useModel }),
     }),
   reviewed: (id) => call(`/api/reviews/${id}`),
+  reviews: (repository = '') => call(`/api/reviews?${query({ repository })}`),
 
   settings: () => call('/api/settings'),
   setSetting: (key, value) =>

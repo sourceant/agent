@@ -469,20 +469,45 @@ type Ask struct {
 	UseModel    bool     `json:"use_model"`
 }
 
-// Review reads a checkout's own work and says whether it is ready.
+// Reading is one review, whether it has finished or not.
+//
+// Kept by the core rather than held here, because the thing that asks for a
+// review is often not the thing that reads it: an agent runs one over MCP and
+// hands somebody a link, and the link has to still work later.
+type Reading struct {
+	ID         string `json:"id"`
+	Repository string `json:"repository"`
+	Status     string `json:"status"`
+	Title      string `json:"title"`
+	Error      string `json:"error"`
+	Started    string `json:"started"`
+	Finished   string `json:"finished"`
+	Review     Review `json:"review"`
+	// Where to send somebody who was handed this by an agent.
+	Path string `json:"path"`
+}
+
+// Review asks for a review and answers with where to find it.
 //
 // Nothing here reaches a forge: the work being judged has not been proposed to
 // anyone yet, which is the point of judging it now.
-func (c *Client) Review(ctx context.Context, ask Ask) (Review, error) {
+func (c *Client) Review(ctx context.Context, ask Ask) (Reading, error) {
 	if ask.Skills == nil {
 		ask.Skills = []string{}
 	}
-	if ask.UseModel {
-		var done context.CancelFunc
-		ctx, done = waiting(ctx, Working)
-		defer done()
-	}
-	return send[Review](ctx, c, http.MethodPost, "/api/local/reviews", nil, ask)
+	return send[Reading](ctx, c, http.MethodPost, "/api/local/reviews", nil, ask)
+}
+
+// Reviewed is one review by name, however long ago it ran.
+func (c *Client) Reviewed(ctx context.Context, id string) (Reading, error) {
+	return get[Reading](ctx, c, "/api/local/reviews/"+url.PathEscape(id), nil)
+}
+
+// Reviews is the last few, newest first, without their findings.
+func (c *Client) Reviews(ctx context.Context, repository string) ([]Reading, error) {
+	return get[[]Reading](ctx, c, "/api/local/reviews", url.Values{
+		"repository": {repository},
+	})
 }
 
 // Setting is one thing configurable on this machine.

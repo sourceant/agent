@@ -46,6 +46,9 @@ type Core struct {
 	// which is what lets one registry of absolute paths mean the same thing to
 	// both runtimes. A repository outside it is not readable this way.
 	Mount string `json:"mount,omitempty"`
+	// UIURL is where the agent serves the screen, so the core can hand out a
+	// link to a review rather than a path.
+	UIURL string `json:"-"`
 	// User is the uid:gid a container runs as, for the docker runtime.
 	//
 	// The image has a user of its own, and where that user's id differs from
@@ -135,6 +138,11 @@ func (c Core) Serve(port int) (string, []string, error) {
 		}
 		if c.DataDir != "" {
 			args = append(args, "-v", c.DataDir+":/data", "-e", "SOURCEANT_HOME=/data")
+		}
+		if c.UIURL != "" {
+			// So a review asked for over MCP can answer with a link somebody
+			// can click, rather than a path they have to assemble.
+			args = append(args, "-e", "SOURCEANT_UI_URL="+c.UIURL)
 		}
 		if c.Mount != "" {
 			args = append(args, "-v", c.Mount+":"+c.Mount)

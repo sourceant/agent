@@ -21,6 +21,8 @@ const router = createRouter({
     { path: '/graph', component: Graph },
     { path: '/knowledge', component: Knowledge },
     { path: '/reviews', component: Reviews },
+    // A review has a name, so an agent can hand somebody a link to one.
+    { path: '/reviews/:id', component: Reviews },
     { path: '/skills', component: Skills },
     // A rule kept in a nested folder has a slash in its name.
     { path: '/skills/:id(.*)', component: Skill },

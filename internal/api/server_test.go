@@ -29,6 +29,7 @@ type stubReader struct {
 	skills          core.SkillPage
 	oneSkill        core.Skill
 	reviewed        core.Review
+	readings        []core.Reading
 	asked           core.Ask
 	stated          core.Stated
 	settings        []core.Setting
@@ -124,10 +125,20 @@ func (s *stubReader) ForgetSkill(_ context.Context, repository, scope, id string
 	return s.err
 }
 
-func (s *stubReader) Review(_ context.Context, ask core.Ask) (core.Review, error) {
+func (s *stubReader) Review(_ context.Context, ask core.Ask) (core.Reading, error) {
 	s.asked = ask
 	s.askedFor = ask.Repository
-	return s.reviewed, s.err
+	return core.Reading{ID: "one", Repository: ask.Repository, Status: "running"}, s.err
+}
+
+func (s *stubReader) Reviewed(_ context.Context, id string) (core.Reading, error) {
+	s.forgot = id
+	return core.Reading{ID: id, Status: "done", Review: s.reviewed}, s.err
+}
+
+func (s *stubReader) Reviews(_ context.Context, repository string) ([]core.Reading, error) {
+	s.askedFor = repository
+	return s.readings, s.err
 }
 
 func (s *stubReader) Settings(context.Context) ([]core.Setting, error) {

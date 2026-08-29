@@ -3,18 +3,19 @@ import {
   Badge as UiBadge,
   Button as UiButton,
   Card as UiCard,
+  Chip,
   Diff,
   Notice,
   PageHead,
   Select,
 } from '@sourceant/design'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Check,
   FileCode,
   GitBranch,
   Loader2,
-  ScrollText,
   ShieldCheck,
   TriangleAlert,
   Wand2,
@@ -31,16 +32,42 @@ import { api } from '~/api'
  * line drawn against that line rather than in a list somewhere else.
  */
 
+const route = useRoute()
+const router = useRouter()
 const { repositories, chosen, error, fetchRepositories } = useRepositories()
 const running = ref(false)
 const judging = ref(false)
 const result = ref(null)
+const reading = ref(null)
 const hasModel = ref(false)
 const looking = ref('')
-const only = ref('')
+const picked = ref([])
+const adding = ref('')
 const skills = ref([])
 
 const files = computed(() => result.value?.changed ?? [])
+
+// Named in the link, so an agent can hand somebody one and it opens here.
+const named = computed(() => String(route.params.id ?? ''))
+
+const spare = computed(() =>
+  skills.value.filter((skill) => !picked.value.includes(skill.id)),
+)
+
+const byId = computed(() => Object.fromEntries(skills.value.map((one) => [one.id, one])))
+const nameOf = (id) => byId.value[id]?.name ?? id
+
+// What a skill made of this change, or undefined where it has not been asked.
+const verdictFor = (id) => verdicts.value.find((one) => one.skill === id)?.passed
+
+function drop(id) {
+  picked.value = picked.value.filter((one) => one !== id)
+}
+
+function add(id) {
+  if (id && !picked.value.includes(id)) picked.value = [...picked.value, id]
+  adding.value = ''
+}
 const where = computed(() => result.value?.where ?? null)
 
 const verdicts = computed(() => result.value?.verdicts ?? [])
@@ -112,18 +139,21 @@ async function run(useModel) {
   flag.value = true
   error.value = ''
   try {
-    const { id } = await api.startReview(chosen.value, {
+    const started = await api.startReview(chosen.value, {
       useModel,
-      skills: only.value ? [only.value] : [],
+      skills: [...picked.value],
     })
-    await collect(id, useModel)
+    // The name goes in the address, so this review can be come back to and
+    // handed to somebody else.
+    router.replace(`/reviews/${started.id}`)
+    await collect(started.id, useModel)
   } catch (caught) {
     error.value = caught.message
     flag.value = false
   }
 }
 
-async function collect(id, useModel) {
+async function collect(id, useModel = true) {
   const flag = useModel ? judging : running
   let answered
   try {
@@ -134,7 +164,9 @@ async function collect(id, useModel) {
     return
   }
 
+  reading.value = answered
   if (answered.status === 'running') {
+    flag.value = true
     asking = setTimeout(() => collect(id, useModel), ASKING_AGAIN)
     return
   }
@@ -148,13 +180,22 @@ async function collect(id, useModel) {
   }
   result.value = answered.review
   looking.value = ''
+  if (answered.repository) chosen.value = answered.repository
+  // What it was actually read against, so removing one and running again is
+  // the obvious next move rather than a form to fill in.
+  picked.value = (answered.review.skills ?? []).map((one) => one.id)
 }
 
 watch(chosen, () => {
   stopAsking()
-  result.value = null
-  only.value = ''
   loadSkills()
+})
+
+// A link somebody was handed opens the review it names.
+watch(named, (id) => {
+  if (!id) return
+  stopAsking()
+  collect(id)
 })
 
 onUnmounted(stopAsking)
@@ -162,6 +203,7 @@ onUnmounted(stopAsking)
 onMounted(async () => {
   await fetchRepositories()
   await Promise.all([checkModel(), loadSkills()])
+  if (named.value) await collect(named.value)
 })
 </script>
 
@@ -177,15 +219,6 @@ onMounted(async () => {
         <Select v-if="repositories.length > 1" v-model="chosen" size="sm" aria-label="Repository">
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
-          </option>
-        </Select>
-
-        <!-- Where the choosing gets it wrong, somebody names the one they
-             wanted rather than arguing with the matcher. -->
-        <Select v-if="skills.length" v-model="only" size="sm" aria-label="Which skills">
-          <option value="">Whatever applies</option>
-          <option v-for="skill in skills" :key="skill.id" :value="skill.id">
-            Only {{ skill.name }}
           </option>
         </Select>
 
@@ -210,6 +243,38 @@ onMounted(async () => {
 
     <Notice v-if="error" tone="danger" class="mb-4">{{ error }}</Notice>
 
+    <!-- What it is read against. Whatever applied comes back here after a
+         review, so taking one off and running again is the obvious next move
+         rather than a form to fill in. -->
+    <UiCard v-if="repositories.length" class="mb-3 flex flex-wrap items-center gap-2 p-3">
+      <span class="text-xs uppercase tracking-wider text-muted-foreground">Read against</span>
+
+      <Chip
+        v-for="id in picked"
+        :key="id"
+        removable
+        :label="nameOf(id)"
+        :tone="verdictFor(id) === undefined ? 'default' : verdictFor(id) ? 'success' : 'danger'"
+        @remove="drop(id)"
+      >
+        {{ nameOf(id) }}
+      </Chip>
+
+      <Chip v-if="!picked.length" tone="muted">Whatever applies</Chip>
+
+      <Select
+        v-if="spare.length"
+        :model-value="adding"
+        size="sm"
+        class="ml-auto"
+        aria-label="Add a skill"
+        @update:model-value="add"
+      >
+        <option value="">Add a skill…</option>
+        <option v-for="skill in spare" :key="skill.id" :value="skill.id">{{ skill.name }}</option>
+      </Select>
+    </UiCard>
+
     <EmptyMachine v-if="repositories.length === 0" />
 
     <template v-else>
@@ -222,12 +287,21 @@ onMounted(async () => {
         v-if="!result"
         class="flex flex-1 flex-col items-center justify-center p-12 text-center"
       >
-        <ShieldCheck class="mb-3 h-8 w-8 text-muted-foreground" />
-        <p class="font-medium">Nothing read yet.</p>
-        <p class="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-          Everything comes off this checkout, so work you have not pushed, or not committed, still
-          gets an answer.
-        </p>
+        <template v-if="reading?.status === 'running'">
+          <Loader2 class="mb-3 h-8 w-8 animate-spin text-muted-foreground" />
+          <p class="font-medium">Reading it.</p>
+          <p class="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            This keeps going whether or not anybody is watching, and the link to it keeps working.
+          </p>
+        </template>
+        <template v-else>
+          <ShieldCheck class="mb-3 h-8 w-8 text-muted-foreground" />
+          <p class="font-medium">Nothing read yet.</p>
+          <p class="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+            Everything comes off this checkout, so work you have not pushed, or not committed,
+            still gets an answer.
+          </p>
+        </template>
       </UiCard>
 
       <template v-else>
@@ -261,6 +335,32 @@ onMounted(async () => {
               {{ advisory.length }} suggestion{{ advisory.length === 1 ? '' : 's' }}
             </UiBadge>
           </span>
+        </UiCard>
+
+        <UiCard v-if="verdicts.length" class="mb-3 p-4">
+          <p class="mb-2 text-xs uppercase tracking-wider text-muted-foreground">
+            What each one made of it
+          </p>
+          <div class="flex flex-wrap gap-1.5">
+            <Chip
+              v-for="verdict in verdicts"
+              :key="verdict.skill"
+              :tone="verdict.passed ? 'success' : 'danger'"
+              :title="verdict.note"
+            >
+              <template #mark>
+                <component
+                  :is="verdict.passed ? Check : TriangleAlert"
+                  class="h-3 w-3 shrink-0"
+                  :class="verdict.passed ? 'text-success' : 'text-destructive'"
+                />
+              </template>
+              {{ verdict.skill }}
+              <span v-if="!verdict.passed" class="ml-1 opacity-70">
+                {{ verdict.findings.length }}
+              </span>
+            </Chip>
+          </div>
         </UiCard>
 
         <Notice
@@ -303,29 +403,6 @@ onMounted(async () => {
               </li>
             </ul>
 
-            <div v-if="verdicts.length" class="border-t">
-              <div class="px-3 py-2 text-xs uppercase tracking-wider text-muted-foreground">
-                Skills it was read against
-              </div>
-              <ul class="max-h-48 overflow-y-auto pb-2">
-                <li
-                  v-for="verdict in verdicts"
-                  :key="verdict.skill"
-                  class="flex items-start gap-2 px-3 py-1.5 text-sm"
-                >
-                  <ScrollText
-                    class="mt-0.5 h-3.5 w-3.5 shrink-0"
-                    :class="verdict.passed ? 'text-success' : 'text-destructive'"
-                  />
-                  <span class="min-w-0 flex-1">
-                    <span class="block truncate" :title="verdict.note">{{ verdict.skill }}</span>
-                    <span class="text-xs text-muted-foreground">
-                      {{ verdict.passed ? 'satisfied' : `${verdict.findings.length} to look at` }}
-                    </span>
-                  </span>
-                </li>
-              </ul>
-            </div>
           </UiCard>
 
           <!-- What changed in it, with anything said about a line against it. -->

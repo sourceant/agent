@@ -51,6 +51,10 @@ func run() error {
 	client := core.New(coreURL, 30*time.Second)
 
 	installed := resolveCore(cfg)
+	// So a review asked for over MCP answers with a link somebody can click
+	// rather than a path they have to assemble. The agent serves the screen, so
+	// it is the only thing that knows this.
+	installed.UIURL = "http://" + cfg.Listen
 	name, args, err := installed.Serve(port)
 	if err != nil {
 		return err
