@@ -241,8 +241,8 @@ onMounted(async () => {
         <p class="text-sm text-muted-foreground">{{ skill.description }}</p>
       </ItemCard>
       <UiCard v-if="!skills.length" class="p-10 text-center">
-        <p class="font-medium">No rules on hand for this repository.</p>
-        <UiButton class="mt-3" variant="outline" @click="router.push('/skills')">Write one down</UiButton>
+        <p class="font-medium">Nothing written down for this repository yet.</p>
+        <UiButton class="mt-3" variant="outline" @click="router.push('/skills/new')">Write one down</UiButton>
       </UiCard>
     </div>
 

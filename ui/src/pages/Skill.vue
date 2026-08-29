@@ -7,6 +7,7 @@ import {
   Input,
   Markdown,
   PageHead,
+  Select,
   Tabs,
   Textarea,
 } from '@sourceant/design'
@@ -16,20 +17,24 @@ import { ArrowLeft, Check, Copy, Loader2, ScrollText, Trash2 } from 'lucide-vue-
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
 
-/* Writing a rule down.
+/* Writing a skill down.
  *
- * A rule is a document, frequently a long one, and a box in a dialog is not
+ * A skill is a document, frequently a long one, and a box in a dialog is not
  * somewhere anybody writes a document. This is a page: the whole height for the
  * text, the rendering beside it on a wide screen and behind a tab on a narrow
  * one, and nothing modal in the way.
  *
- * A rule kept in somebody's own agent folder opens read-only, because those
- * files are theirs and are frequently a link into a checkout of their own.
- * Saving it here saves a copy into the repository instead.
+ * It goes in one of two places. A repository, when it is about that project and
+ * the team should get it by pulling. This machine, when it is how you work
+ * everywhere. A skill kept in a coding agent's own folder opens read-only,
+ * because those files are that agent's and are frequently a link into a
+ * checkout of their own; saving writes a copy into one of ours instead.
  */
 
 const NEW = 'new'
-const MINE = 'repository'
+const REPOSITORY = 'repository'
+const MACHINE = 'machine'
+const OURS = [REPOSITORY, MACHINE]
 
 const route = useRoute()
 const router = useRouter()
@@ -40,6 +45,7 @@ const fresh = computed(() => id.value === NEW)
 
 const skill = ref(null)
 const draft = ref({ id: '', name: '', description: '', body: '' })
+const scope = ref(REPOSITORY)
 const pane = ref('write')
 const saving = ref(false)
 const saved = ref(false)
@@ -51,9 +57,14 @@ const panes = [
   { id: 'preview', label: 'Preview' },
 ]
 
-// Somebody else's rule is read, never written. Saving makes the repository a
-// copy, which is then the one that gets used.
-const theirs = computed(() => !!skill.value && skill.value.origin !== MINE)
+const scopes = computed(() => [
+  { id: REPOSITORY, label: chosen.value || 'This repository' },
+  { id: MACHINE, label: 'This machine' },
+])
+
+// A skill in a coding agent's own folder is read, never written. Saving makes a
+// copy of ours, which is then the one that gets used.
+const theirs = computed(() => !!skill.value && !OURS.includes(skill.value.origin))
 const copying = computed(() => theirs.value)
 
 const changed = computed(() => {
@@ -68,18 +79,26 @@ const changed = computed(() => {
 
 const lines = computed(() => (draft.value.body ? draft.value.body.split('\n').length : 0))
 
+const savedInto = computed(() =>
+  scope.value === MACHINE
+    ? 'Saved on this machine, so it applies wherever you are working.'
+    : `Saved into ${chosen.value} as a file, so the team gets it by pulling.`,
+)
+
 async function load() {
   loading.value = true
   problem.value = ''
   if (fresh.value) {
     skill.value = null
     draft.value = { id: '', name: '', description: '', body: '' }
+    scope.value = route.query.scope === MACHINE ? MACHINE : REPOSITORY
     loading.value = false
     return
   }
   try {
     const found = await api.skill(id.value, chosen.value)
     skill.value = found
+    scope.value = found.origin === MACHINE ? MACHINE : REPOSITORY
     draft.value = {
       id: found.id.split('/').pop(),
       name: found.name,
@@ -99,7 +118,8 @@ async function save() {
   problem.value = ''
   try {
     const written = await api.recordSkill({
-      repository: chosen.value,
+      scope: scope.value,
+      repository: scope.value === REPOSITORY ? chosen.value : '',
       id: draft.value.id || draft.value.name,
       name: draft.value.name || draft.value.id,
       description: draft.value.description,
@@ -119,9 +139,10 @@ async function save() {
 }
 
 async function forget() {
-  if (!confirm(`Forget ${draft.value.name}?\n\nThe file is removed from this repository.`)) return
+  const from = scope.value === MACHINE ? 'this machine' : chosen.value
+  if (!confirm(`Forget ${draft.value.name}?\n\nThe file is removed from ${from}.`)) return
   try {
-    await api.forgetSkill(chosen.value, id.value)
+    await api.forgetSkill(chosen.value, scope.value, id.value)
     router.push('/skills')
   } catch (caught) {
     problem.value = caught.message
@@ -139,8 +160,8 @@ onMounted(async () => {
   <div class="flex h-full min-h-0 flex-col">
     <PageHead
       pillar="review"
-      :title="fresh ? 'Write a rule down' : draft.name || id"
-      :sub="skill?.path || `Saved into ${chosen} as a file, so the team gets it by pulling.`"
+      :title="fresh ? 'A new skill' : draft.name || id"
+      :sub="skill?.path || savedInto"
       :mono="!!skill?.path"
     >
       <template #back>
@@ -151,7 +172,7 @@ onMounted(async () => {
       <template #icon><ScrollText class="h-5 w-5" /></template>
       <template #badges>
         <UiBadge v-if="skill" :variant="theirs ? 'outline' : 'success'">
-          {{ theirs ? skill.origin : 'this repository' }}
+          {{ theirs ? skill.origin : scope === MACHINE ? 'this machine' : 'this repository' }}
         </UiBadge>
       </template>
       <template #actions>
@@ -160,7 +181,7 @@ onMounted(async () => {
           v-if="skill && !theirs"
           variant="ghost"
           size="icon"
-          aria-label="Forget this rule"
+          aria-label="Forget this skill"
           @click="forget"
         >
           <Trash2 class="h-4 w-4" />
@@ -168,7 +189,7 @@ onMounted(async () => {
         <UiButton size="sm" :disabled="saving || !changed" @click="save">
           <Loader2 v-if="saving" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
           <component :is="copying ? Copy : Check" v-else class="mr-1.5 h-3.5 w-3.5" />
-          {{ copying ? 'Save into this repository' : 'Save' }}
+          {{ copying ? `Save into ${scope === MACHINE ? 'this machine' : chosen}` : 'Save' }}
         </UiButton>
       </template>
     </PageHead>
@@ -177,9 +198,9 @@ onMounted(async () => {
       v-if="copying"
       class="mb-4 rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm"
     >
-      This one is yours, kept wherever your coding agent keeps it, so editing it here would
-      change a file outside this repository. Saving writes a copy into
-      <span class="font-mono">{{ chosen }}</span>, and the copy is then the one that gets used.
+      This one belongs to your coding agent, kept wherever it keeps its own, so editing it here
+      would change a file outside this repository. Saving writes a copy where you choose below,
+      and the copy is then the one that gets used.
     </p>
 
     <p v-if="problem" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
@@ -189,11 +210,11 @@ onMounted(async () => {
     <p v-if="loading" class="py-10 text-center text-sm text-muted-foreground">Reading it.</p>
 
     <template v-else>
-      <UiCard class="mb-3 grid gap-4 p-5 lg:grid-cols-2">
+      <UiCard class="mb-3 grid gap-4 p-5 lg:grid-cols-3">
         <Field
           label="Name"
           for="skill-id"
-          hint="Lower case words joined by hyphens. It names the folder the rule is saved in."
+          hint="Lower case words joined by hyphens. It names the folder the skill is saved in."
         >
           <Input
             id="skill-id"
@@ -203,9 +224,25 @@ onMounted(async () => {
           />
         </Field>
         <Field
+          label="Where it belongs"
+          for="skill-scope"
+          :hint="scope === MACHINE
+            ? 'Kept on this machine, so it applies wherever you are working.'
+            : 'Kept in the repository as a file, so the team gets it by pulling.'"
+        >
+          <Select
+            id="skill-scope"
+            v-model="scope"
+            :disabled="!!skill && !theirs"
+            class="w-full"
+          >
+            <option v-for="one in scopes" :key="one.id" :value="one.id">{{ one.label }}</option>
+          </Select>
+        </Field>
+        <Field
           label="When it applies"
           for="skill-description"
-          hint="One sentence. This is what decides whether a change gets read against this rule."
+          hint="One sentence. It decides whether a change gets read against this skill."
         >
           <Input
             id="skill-description"
@@ -218,7 +255,7 @@ onMounted(async () => {
       <div class="mb-2 flex items-center justify-between gap-3">
         <Tabs v-model="pane" :tabs="panes" label="Write or preview" class="lg:hidden" />
         <p class="hidden text-xs uppercase tracking-wider text-muted-foreground lg:block">
-          What it requires
+          What it says
         </p>
         <p class="text-xs text-muted-foreground">
           {{ lines }} line{{ lines === 1 ? '' : 's' }} · markdown
@@ -233,7 +270,7 @@ onMounted(async () => {
           class="h-full min-h-[24rem] resize-none font-mono leading-relaxed"
           :class="pane === 'write' ? '' : 'hidden lg:block'"
           placeholder="Never edit a migration that has already run. Add a new one instead."
-          aria-label="What the rule requires"
+          aria-label="What the skill says"
         />
         <UiCard
           class="h-full min-h-[24rem] overflow-auto p-5"
@@ -242,7 +279,7 @@ onMounted(async () => {
           <Markdown v-if="draft.body" :source="draft.body" />
           <p v-else class="text-sm text-muted-foreground">
             Nothing written yet. What appears here is what a person reads, and what a model is
-            given when your work is checked against this rule.
+            given when your work is checked against this skill.
           </p>
         </UiCard>
       </div>

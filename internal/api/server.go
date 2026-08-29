@@ -34,7 +34,7 @@ type Reader interface {
 	Skills(ctx context.Context, repository string) (core.SkillPage, error)
 	Skill(ctx context.Context, id, repository string) (core.Skill, error)
 	RecordSkill(ctx context.Context, stated core.Stated) (core.Skill, error)
-	ForgetSkill(ctx context.Context, repository, id string) error
+	ForgetSkill(ctx context.Context, repository, scope, id string) error
 	Review(ctx context.Context, ask core.Ask) (core.Review, error)
 	Settings(ctx context.Context) ([]core.Setting, error)
 	SetSetting(ctx context.Context, key string, value any) (core.Setting, error)
@@ -66,11 +66,19 @@ type Server struct {
 	supervisor Supervision
 	version    string
 	coreURL    string
+	// Reviews the agent is running, and the answers it is holding.
+	reviews *reviews
 }
 
 // New builds the agent's HTTP surface.
 func New(reader Reader, supervisor Supervision, version, coreURL string) *Server {
-	return &Server{reader: reader, supervisor: supervisor, version: version, coreURL: coreURL}
+	return &Server{
+		reader:     reader,
+		supervisor: supervisor,
+		version:    version,
+		coreURL:    coreURL,
+		reviews:    newReviews(),
+	}
 }
 
 // Handler is the agent's routes.
@@ -94,6 +102,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/skills", s.recordSkill)
 	mux.HandleFunc("DELETE /api/skills", s.forgetSkill)
 	mux.HandleFunc("POST /api/reviews", s.review)
+	mux.HandleFunc("GET /api/reviews/{id}", s.reviewed)
 	mux.HandleFunc("GET /api/browse", s.browse)
 	mux.Handle("GET /", ui.Handler())
 	return mux
@@ -314,8 +323,8 @@ func (s *Server) recordSkill(w http.ResponseWriter, r *http.Request) {
 	if !readBody(w, r, &stated) {
 		return
 	}
-	if stated.Repository == "" || stated.ID == "" {
-		write(w, http.StatusBadRequest, problem{Error: "name a repository and a rule"})
+	if stated.ID == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a skill"})
 		return
 	}
 	written, err := s.reader.RecordSkill(r.Context(), stated)
@@ -328,45 +337,17 @@ func (s *Server) recordSkill(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) forgetSkill(w http.ResponseWriter, r *http.Request) {
 	repository := r.URL.Query().Get("repository")
+	scope := r.URL.Query().Get("scope")
 	id := r.URL.Query().Get("id")
-	if repository == "" || id == "" {
-		write(w, http.StatusBadRequest, problem{Error: "name a repository and a rule"})
+	if id == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a skill"})
 		return
 	}
-	if err := s.reader.ForgetSkill(r.Context(), repository, id); err != nil {
+	if err := s.reader.ForgetSkill(r.Context(), repository, scope, id); err != nil {
 		fail(w, err)
 		return
 	}
 	write(w, http.StatusOK, map[string]string{"id": id})
-}
-
-func (s *Server) review(w http.ResponseWriter, r *http.Request) {
-	var ask core.Ask
-	if !readBody(w, r, &ask) {
-		return
-	}
-	if ask.Repository == "" {
-		write(w, http.StatusBadRequest, problem{Error: "name a repository"})
-		return
-	}
-	reviewed, err := s.reader.Review(r.Context(), ask)
-	if err != nil {
-		fail(w, err)
-		return
-	}
-	if reviewed.Changed == nil {
-		reviewed.Changed = []core.ChangedFile{}
-	}
-	if reviewed.Skills == nil {
-		reviewed.Skills = []core.Skill{}
-	}
-	if reviewed.Knowledge == nil {
-		reviewed.Knowledge = []core.Recorded{}
-	}
-	if reviewed.Verdicts == nil {
-		reviewed.Verdicts = []core.Verdict{}
-	}
-	write(w, http.StatusOK, reviewed)
 }
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {

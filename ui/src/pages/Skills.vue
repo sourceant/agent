@@ -16,19 +16,21 @@ import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
 
-/* The rules a team has for its own code.
+/* What a team has written down about how work here is done.
  *
- * Some of them are already written down: people have been teaching their coding
- * agents how work is done here for a while, in a folder the agent reads, and
- * nothing else in this product could see it. Those are read and never written,
- * because they are somebody's own files and are frequently a link into a
- * checkout of their own.
+ * Some of it already exists: people have been teaching their coding agents for
+ * a while, in a folder the agent reads, and nothing else in this product could
+ * see it. Those are read and never written, because they are that agent's files
+ * and are frequently a link into a checkout of their own.
  *
- * The rest are in somebody's head. Those get written here, into the repository
- * the rule is about, where the rest of the team gets them by pulling.
+ * The rest is in somebody's head. That gets written here, into the repository
+ * it is about so the team gets it by pulling, or onto this machine for what
+ * somebody wants everywhere.
  */
 
-const MINE = 'repository'
+const REPOSITORY = 'repository'
+const MACHINE = 'machine'
+const OURS = [REPOSITORY, MACHINE]
 
 const router = useRouter()
 const { repositories, chosen, error, fetchRepositories } = useRepositories()
@@ -38,15 +40,17 @@ const where = ref('all')
 
 const wheres = [
   { id: 'all', label: 'All' },
-  { id: MINE, label: "This repository's" },
-  { id: 'machine', label: 'Yours' },
+  { id: REPOSITORY, label: 'This repository' },
+  { id: MACHINE, label: 'This machine' },
+  { id: 'agents', label: 'Your coding agents' },
 ]
 
 const shown = computed(() => {
   const wanted = term.value.trim().toLowerCase()
   return skills.value.filter((skill) => {
-    if (where.value === MINE && skill.origin !== MINE) return false
-    if (where.value === 'machine' && skill.origin === MINE) return false
+    if (where.value === REPOSITORY && skill.origin !== REPOSITORY) return false
+    if (where.value === MACHINE && skill.origin !== MACHINE) return false
+    if (where.value === 'agents' && OURS.includes(skill.origin)) return false
     if (!wanted) return true
     return (
       skill.name.toLowerCase().includes(wanted) ||
@@ -55,7 +59,9 @@ const shown = computed(() => {
   })
 })
 
-const ours = (skill) => skill.origin === MINE
+const ours = (skill) => OURS.includes(skill.origin)
+const home = (skill) =>
+  skill.origin === MACHINE ? 'this machine' : skill.origin === REPOSITORY ? 'this repository' : skill.origin
 
 async function load() {
   try {
@@ -69,9 +75,9 @@ async function load() {
 }
 
 async function forget(skill) {
-  if (!confirm(`Forget ${skill.name}?\n\nThe file is removed from this repository.`)) return
+  if (!confirm(`Forget ${skill.name}?\n\nThe file is removed from ${home(skill)}.`)) return
   try {
-    await api.forgetSkill(chosen.value, skill.id)
+    await api.forgetSkill(chosen.value, skill.origin, skill.id)
     await load()
   } catch (caught) {
     error.value = caught.message
@@ -90,7 +96,7 @@ onMounted(async () => {
     <PageHead
       pillar="review"
       title="Skills"
-      sub="The rules your work is read against, yours and this repository's."
+      sub="What your work is read against: this repository's, this machine's, and your own."
     >
       <template #icon><BookOpenCheck class="h-6 w-6" /></template>
       <template #actions>
@@ -101,7 +107,7 @@ onMounted(async () => {
         </Select>
         <div class="relative">
           <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input v-model="term" size="sm" placeholder="Find a rule" class="w-48 pl-8" aria-label="Find a rule" />
+          <Input v-model="term" size="sm" placeholder="Find a skill" class="w-48 pl-8" aria-label="Find a skill" />
         </div>
         <UiButton v-if="repositories.length" size="sm" variant="glow" @click="router.push('/skills/new')">
           <Plus class="mr-2 h-4 w-4" />
@@ -117,7 +123,7 @@ onMounted(async () => {
     <EmptyMachine v-if="repositories.length === 0" />
 
     <template v-else>
-      <Tabs v-model="where" :tabs="wheres" label="Whose rules" class="mb-4" />
+      <Tabs v-model="where" :tabs="wheres" label="Where they are kept" class="mb-4" />
 
       <div v-if="shown.length" class="space-y-3">
         <ItemCard
@@ -132,9 +138,7 @@ onMounted(async () => {
         >
           <template #icon><ScrollText class="h-5 w-5" /></template>
           <template #badges>
-            <UiBadge :variant="ours(skill) ? 'success' : 'outline'">
-              {{ ours(skill) ? 'this repository' : skill.origin }}
-            </UiBadge>
+            <UiBadge :variant="ours(skill) ? 'success' : 'outline'">{{ home(skill) }}</UiBadge>
           </template>
           <p class="text-sm text-muted-foreground">{{ skill.description }}</p>
           <template #actions>
@@ -155,9 +159,10 @@ onMounted(async () => {
         <ScrollText class="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
         <p class="font-medium">Nothing written down here yet.</p>
         <p class="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">
-          A rule says when it applies and what it requires. This repository's live in
-          <code class="font-mono">.sourceant/skills</code>, so the rest of the team gets them by
-          pulling. Anything you already taught Claude or Codex is read from your own folders.
+          A skill says when it applies and what it says to do. This repository's live in its
+          <code class="font-mono">.sourceant/skills</code>, so the team gets them by pulling;
+          this machine's live in <code class="font-mono">~/.sourceant/skills</code>. Anything you
+          already taught Claude or Codex is read from their own folders.
         </p>
         <UiButton class="mt-4" variant="glow" @click="router.push('/skills/new')">
           <Plus class="mr-2 h-4 w-4" />

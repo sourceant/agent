@@ -320,27 +320,38 @@ func (c *Client) Skill(ctx context.Context, id, repository string) (Skill, error
 	return get[Skill](ctx, c, "/api/skills/"+id, url.Values{"repository": {repository}})
 }
 
-// Stated is a rule somebody is writing down, and the repository it is about.
+// Stated is a skill somebody is writing down, and where it belongs.
+//
+// Scope is "repository" for something about one project, which the team then
+// gets by pulling, or "machine" for something somebody wants everywhere.
 type Stated struct {
-	Repository  string `json:"repository"`
 	ID          string `json:"id"`
+	Repository  string `json:"repository"`
+	Scope       string `json:"scope"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Body        string `json:"body"`
 }
 
-// RecordSkill states a rule in the repository it is about.
+// RecordSkill writes a skill down, in a repository or on this machine.
 //
-// Only a repository's own rules are written. What somebody keeps in their agent
-// folders is theirs, and core refuses to write there.
+// Only the places this product owns are written. What somebody keeps in the
+// folders named after a coding agent is that agent's, and core refuses to
+// write there.
 func (c *Client) RecordSkill(ctx context.Context, stated Stated) (Skill, error) {
+	if stated.Scope == "" {
+		stated.Scope = "repository"
+	}
 	return send[Skill](ctx, c, http.MethodPut, "/api/skills", nil, stated)
 }
 
-// ForgetSkill removes a rule this repository stated.
-func (c *Client) ForgetSkill(ctx context.Context, repository, id string) error {
+// ForgetSkill removes a skill written here.
+func (c *Client) ForgetSkill(ctx context.Context, repository, scope, id string) error {
+	if scope == "" {
+		scope = "repository"
+	}
 	_, err := send[map[string]any](ctx, c, http.MethodDelete, "/api/skills",
-		url.Values{"repository": {repository}, "id": {id}}, nil)
+		url.Values{"repository": {repository}, "scope": {scope}, "id": {id}}, nil)
 	return err
 }
 

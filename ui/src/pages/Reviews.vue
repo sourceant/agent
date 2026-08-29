@@ -10,7 +10,7 @@ import {
   Select,
   Tabs,
 } from '@sourceant/design'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   BookOpen,
   Check,
@@ -39,9 +39,9 @@ const hasModel = ref(false)
 const view = ref('verdicts')
 
 const views = [
-  { id: 'verdicts', label: 'What the rules say' },
+  { id: 'verdicts', label: 'What they say' },
   { id: 'changed', label: 'What changed' },
-  { id: 'rules', label: 'Rules that apply' },
+  { id: 'rules', label: 'What applies' },
   { id: 'knowledge', label: 'What we know' },
 ]
 
@@ -70,31 +70,70 @@ async function checkModel() {
   }
 }
 
+/* The agent runs the review and holds the answer; this asks how it went.
+ *
+ * A review takes tens of seconds and will take longer on a bigger repository.
+ * Waiting on the request that started it means a connection held open for all
+ * of that, and anything that interrupts it throws away work already paid for. */
+const ASKING_AGAIN = 1500
+let asking = null
+
+function stopAsking() {
+  if (asking) clearTimeout(asking)
+  asking = null
+}
+
 async function run(useModel) {
+  stopAsking()
   const flag = useModel ? judging : running
   flag.value = true
   error.value = ''
   try {
-    result.value = await api.review(chosen.value, {
+    const { id } = await api.startReview(chosen.value, {
       against: against.value,
       title: title.value,
       useModel,
     })
-    view.value = useModel ? 'verdicts' : 'changed'
+    await collect(id, useModel)
   } catch (caught) {
-    // What was already read stays on screen. Losing a good reading of the
-    // change because the judging failed is two steps backwards for one problem.
-    error.value = caught.message.includes('fetch')
-      ? 'The agent stopped answering part way through. Nothing was changed; try again.'
-      : caught.message
-  } finally {
+    error.value = caught.message
     flag.value = false
   }
 }
 
+async function collect(id, useModel) {
+  const flag = useModel ? judging : running
+  let answered
+  try {
+    answered = await api.reviewed(id)
+  } catch (caught) {
+    error.value = caught.message
+    flag.value = false
+    return
+  }
+
+  if (answered.status === 'running') {
+    asking = setTimeout(() => collect(id, useModel), ASKING_AGAIN)
+    return
+  }
+
+  flag.value = false
+  if (answered.status === 'failed') {
+    // What was already read stays on screen. Losing a good reading of the
+    // change because the judging failed is two steps backwards for one problem.
+    error.value = answered.error
+    return
+  }
+  result.value = answered.review
+  view.value = useModel ? 'verdicts' : 'changed'
+}
+
 watch(chosen, () => {
+  stopAsking()
   result.value = null
 })
+
+onUnmounted(stopAsking)
 
 onMounted(async () => {
   await fetchRepositories()
@@ -146,7 +185,7 @@ onMounted(async () => {
         <Field
           label="What the work is"
           for="review-title"
-          hint="What a pull request would be called. It decides which rules are picked."
+          hint="What a pull request would be called. It decides which skills are picked."
         >
           <Input id="review-title" v-model="title" placeholder="Retry a failed charge three times" />
         </Field>
@@ -163,8 +202,9 @@ onMounted(async () => {
         v-if="!hasModel"
         class="mb-6 rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm"
       >
-        No model is configured, so nothing here can be judged. Reading what changed and which rules
-        apply needs nothing. Choose a model in Settings to have the work reviewed against them.
+        No model is configured, so nothing here can be judged. Reading what changed, and what
+        applies to it, needs nothing. Choose a model in Settings to have the work read against
+        your skills.
       </p>
 
       <template v-if="result">
@@ -284,7 +324,7 @@ onMounted(async () => {
           </ItemCard>
 
           <p v-if="!result.skills.length" class="py-8 text-center text-sm text-muted-foreground">
-            No rule on this machine bears on what changed here.
+            Nothing on this machine bears on what changed here.
           </p>
         </div>
 

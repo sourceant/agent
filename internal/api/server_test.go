@@ -112,7 +112,7 @@ func (s *stubReader) RecordSkill(_ context.Context, stated core.Stated) (core.Sk
 	return core.Skill{ID: stated.ID, Name: stated.Name}, s.err
 }
 
-func (s *stubReader) ForgetSkill(_ context.Context, repository, id string) error {
+func (s *stubReader) ForgetSkill(_ context.Context, repository, scope, id string) error {
 	s.askedFor = repository
 	s.forgot = id
 	return s.err

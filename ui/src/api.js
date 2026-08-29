@@ -55,20 +55,27 @@ export const api = {
    * this machine's agent folders and from the repository's own. */
   skills: (repository = '') => call(`/api/skills?${query({ repository })}`),
   skill: (id, repository = '') => call(`/api/skills/${id}?${query({ repository })}`),
-  /* Only a repository's own are written. What somebody keeps in their agent
-   * folders is theirs, and the core refuses to write there. */
-  recordSkill: (skill) => call('/api/skills', { method: 'PUT', body: JSON.stringify(skill) }),
-  forgetSkill: (repository, id) =>
-    call(`/api/skills?${query({ repository, id })}`, { method: 'DELETE' }),
+  /* Written where this product owns the folder: a repository, so the team gets
+   * it by pulling, or the machine, for what somebody wants everywhere. What
+   * sits in a coding agent's own folders is read and never written. */
+  recordSkill: (skill) =>
+    call('/api/skills', { method: 'PUT', body: JSON.stringify({ scope: 'repository', ...skill }) }),
+  forgetSkill: (repository, scope, id) =>
+    call(`/api/skills?${query({ repository, scope, id })}`, { method: 'DELETE' }),
 
   /* Reading a checkout's own work before anybody else has been asked to. Asking
-   * without a model is the free half: what changed and which rules bear on it,
-   * with nothing judged. */
-  review: (repository, { against = '', title = '', description = '', skills = [], useModel = true } = {}) =>
+   * without a model is the free half: what changed and what bears on it, with
+   * nothing judged.
+   *
+   * The agent runs it and holds the answer, because a review takes tens of
+   * seconds and a connection held open that long loses work when anything
+   * interrupts it. */
+  startReview: (repository, { against = '', title = '', description = '', skills = [], useModel = true } = {}) =>
     call('/api/reviews', {
       method: 'POST',
       body: JSON.stringify({ repository, against, title, description, skills, use_model: useModel }),
     }),
+  reviewed: (id) => call(`/api/reviews/${id}`),
 
   settings: () => call('/api/settings'),
   setSetting: (key, value) =>
