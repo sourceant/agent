@@ -42,4 +42,16 @@ export const api = {
     call(`/api/knowledge?${query({ repository, id })}`, { method: 'DELETE' }),
 
   browse: (path = '') => call(`/api/browse?${query({ path })}`),
+
+  /* Reading what a repository already states. Asking without recording is the
+   * safe half, so a person can see what would be written before it is. */
+  initialize: (repository, dryRun = false) =>
+    call('/api/knowledge/initialize', {
+      method: 'POST',
+      body: JSON.stringify({ repository, dry_run: dryRun }),
+    }),
+
+  settings: () => call('/api/settings'),
+  setSetting: (key, value) =>
+    call('/api/settings', { method: 'PUT', body: JSON.stringify({ key, value }) }),
 }

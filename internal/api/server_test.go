@@ -22,6 +22,11 @@ type stubReader struct {
 	askedOptions    core.GraphOptions
 	askedEverything bool
 	askedUpdate     bool
+	askedDryRun     bool
+	seeded          core.Seeded
+	settings        []core.Setting
+	setKey          string
+	setValue        any
 	registered      core.Repository
 	recorded        core.Knowledge
 	forgot          string
@@ -71,6 +76,21 @@ func (s *stubReader) ForgetKnowledge(_ context.Context, repository, id string) e
 	s.askedFor = repository
 	s.forgot = id
 	return s.err
+}
+
+func (s *stubReader) Initialize(_ context.Context, repository string, dryRun bool) (core.Seeded, error) {
+	s.askedFor = repository
+	s.askedDryRun = dryRun
+	return s.seeded, s.err
+}
+
+func (s *stubReader) Settings(context.Context) ([]core.Setting, error) {
+	return s.settings, s.err
+}
+
+func (s *stubReader) SetSetting(_ context.Context, key string, value any) (core.Setting, error) {
+	s.setKey, s.setValue = key, value
+	return core.Setting{Key: key}, s.err
 }
 
 type stubSupervisor struct {

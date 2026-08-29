@@ -5,6 +5,7 @@ import { Card as UiCard } from '@sourceant/design'
 import { Button as UiButton } from '@sourceant/design'
 import { Badge as UiBadge } from '@sourceant/design'
 import PageHead from '~/components/PageHead.vue'
+import ModelSettings from '~/components/ModelSettings.vue'
 import { useTheme } from '~/composables/useTheme'
 import { api } from '~/api'
 
@@ -40,6 +41,15 @@ onMounted(async () => {
         <component :is="isDark ? Sun : Moon" class="mr-2 h-4 w-4" />
         {{ isDark ? 'Light mode' : 'Dark mode' }}
       </UiButton>
+    </UiCard>
+
+    <UiCard class="p-5 mb-3">
+      <h2 class="font-semibold mb-1">Model</h2>
+      <p class="text-sm text-muted-foreground mb-4">
+        Reading a repository needs none of this. Anything that proposes rather than reads
+        does, and it stays off until you say which model to ask.
+      </p>
+      <ModelSettings />
     </UiCard>
 
     <UiCard v-if="status" class="p-5">

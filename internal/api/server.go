@@ -30,6 +30,9 @@ type Reader interface {
 	Knowledge(ctx context.Context, repository string, limit, offset int) (core.KnowledgePage, error)
 	RecordKnowledge(ctx context.Context, repository string, item core.Knowledge) (core.Knowledge, error)
 	ForgetKnowledge(ctx context.Context, repository, id string) error
+	Initialize(ctx context.Context, repository string, dryRun bool) (core.Seeded, error)
+	Settings(ctx context.Context) ([]core.Setting, error)
+	SetSetting(ctx context.Context, key string, value any) (core.Setting, error)
 }
 
 // Supervision is the part of the supervisor this server reports on.
@@ -76,6 +79,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/knowledge", s.knowledge)
 	mux.HandleFunc("PUT /api/knowledge", s.recordKnowledge)
 	mux.HandleFunc("DELETE /api/knowledge", s.forgetKnowledge)
+	mux.HandleFunc("POST /api/knowledge/initialize", s.initialize)
+	mux.HandleFunc("GET /api/settings", s.settings)
+	mux.HandleFunc("PUT /api/settings", s.setSetting)
 	mux.HandleFunc("GET /api/browse", s.browse)
 	mux.Handle("GET /", ui.Handler())
 	return mux
@@ -237,6 +243,61 @@ func (s *Server) forgetKnowledge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, http.StatusOK, map[string]string{"id": id})
+}
+
+func (s *Server) initialize(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Repository string `json:"repository"`
+		DryRun     bool   `json:"dry_run"`
+	}
+	if !readBody(w, r, &body) {
+		return
+	}
+	if body.Repository == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a repository"})
+		return
+	}
+	seeded, err := s.reader.Initialize(r.Context(), body.Repository, body.DryRun)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if seeded.Found == nil {
+		seeded.Found = []core.Seed{}
+	}
+	write(w, http.StatusOK, seeded)
+}
+
+func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.reader.Settings(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if settings == nil {
+		settings = []core.Setting{}
+	}
+	write(w, http.StatusOK, settings)
+}
+
+func (s *Server) setSetting(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Key   string `json:"key"`
+		Value any    `json:"value"`
+	}
+	if !readBody(w, r, &body) {
+		return
+	}
+	if body.Key == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a setting"})
+		return
+	}
+	setting, err := s.reader.SetSetting(r.Context(), body.Key, body.Value)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, setting)
 }
 
 func (s *Server) browse(w http.ResponseWriter, r *http.Request) {

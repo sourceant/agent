@@ -17,6 +17,7 @@ import { notionists } from '@dicebear/collection'
 import { Logo as UiLogo } from '@sourceant/design'
 import { Avatar as UiAvatar } from '@sourceant/design'
 import { useTheme } from '~/composables/useTheme'
+import Onboarding from '~/components/Onboarding.vue'
 
 const { isDark, toggleTheme, restoreTheme } = useTheme()
 const route = useRoute()
@@ -164,5 +165,7 @@ onUnmounted(() => document.removeEventListener('click', closeDropdowns))
         <RouterView />
       </div>
     </main>
+
+    <Onboarding />
   </div>
 </template>

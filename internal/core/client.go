@@ -232,6 +232,57 @@ func (c *Client) RecordKnowledge(ctx context.Context, repository string, item Kn
 	})
 }
 
+// Seed is one thing a repository states, read off a file rather than judged.
+type Seed struct {
+	Knowledge
+	Source string `json:"source"`
+}
+
+// Seeded is what reading a repository's own words found.
+type Seeded struct {
+	Found    []Seed `json:"found"`
+	Recorded int    `json:"recorded"`
+}
+
+// Initialize records what a repository already states about itself.
+//
+// Asking without recording is the safe half, so a person can see what would be
+// written before any of it is.
+func (c *Client) Initialize(ctx context.Context, repository string, dryRun bool) (Seeded, error) {
+	return send[Seeded](ctx, c, http.MethodPost, "/api/knowledge/initialize", nil, map[string]any{
+		"repository": repository,
+		"dry_run":    dryRun,
+	})
+}
+
+// Setting is one thing configurable on this machine.
+//
+// A credential answers whether it is set rather than what it is: a screen needs
+// the first and nothing needs the second.
+type Setting struct {
+	Key         string   `json:"key"`
+	Label       string   `json:"label"`
+	Description string   `json:"description"`
+	Type        string   `json:"type"`
+	Value       any      `json:"value"`
+	Default     any      `json:"default"`
+	Choices     []string `json:"choices"`
+	Group       string   `json:"group"`
+	Secret      bool     `json:"secret"`
+	IsSet       *bool    `json:"is_set"`
+}
+
+// Settings is everything configurable on this machine.
+func (c *Client) Settings(ctx context.Context) ([]Setting, error) {
+	return get[[]Setting](ctx, c, "/api/local/settings", nil)
+}
+
+// SetSetting gives one setting a value on this machine.
+func (c *Client) SetSetting(ctx context.Context, key string, value any) (Setting, error) {
+	return send[Setting](ctx, c, http.MethodPut, "/api/local/settings/"+url.PathEscape(key),
+		nil, map[string]any{"value": value})
+}
+
 // ForgetKnowledge removes something recorded.
 func (c *Client) ForgetKnowledge(ctx context.Context, repository, id string) error {
 	_, err := send[map[string]any](ctx, c, http.MethodDelete, "/api/knowledge",

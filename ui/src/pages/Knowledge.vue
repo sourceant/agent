@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
-import { Lightbulb, Plus, Pencil, Trash2, Check } from 'lucide-vue-next'
+import { Lightbulb, Plus, Pencil, Trash2, Check, Sparkles, Loader2 } from 'lucide-vue-next'
 import { Card as UiCard } from '@sourceant/design'
 import { Button as UiButton } from '@sourceant/design'
 import { Badge as UiBadge } from '@sourceant/design'
@@ -18,6 +18,27 @@ const editing = ref(null)
 const draft = ref({ id: '', kind: 'decision', summary: '', why: '' })
 const problem = ref('')
 const saving = ref(false)
+const reading = ref(false)
+const readOff = ref(null)
+
+/* What a repository already states about itself: decision records, conventions
+ * and constraints in a contributing guide, rules written for whatever works on
+ * it. It is knowledge already, just nowhere a tool can reach. Nothing is judged
+ * or summarised, so it all arrives proposed. */
+async function initialize() {
+  reading.value = true
+  readOff.value = null
+  try {
+    const found = await api.initialize(chosen.value)
+    readOff.value = found.recorded
+    error.value = ''
+    await load()
+  } catch (caught) {
+    error.value = caught.message
+  } finally {
+    reading.value = false
+  }
+}
 
 async function load() {
   if (!chosen.value) return
@@ -101,6 +122,16 @@ onMounted(async () => {
             {{ repository.name }}
           </option>
         </select>
+        <UiButton
+          v-if="repositories.length"
+          variant="outline"
+          :disabled="reading"
+          @click="initialize"
+        >
+          <Loader2 v-if="reading" class="mr-2 h-4 w-4 animate-spin" />
+          <Sparkles v-else class="mr-2 h-4 w-4" />
+          {{ reading ? 'Reading…' : 'Read what the repo states' }}
+        </UiButton>
         <UiButton v-if="repositories.length" variant="glow" @click="open(null)">
           <Plus class="mr-2 h-4 w-4" />
           Record something
@@ -112,6 +143,17 @@ onMounted(async () => {
       {{ error }}
     </p>
 
+    <p v-if="readOff !== null" class="mb-4 rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
+      <template v-if="readOff">
+        Read {{ readOff }} thing{{ readOff === 1 ? '' : 's' }} this repository already states.
+        Nobody has agreed to any of it, so it is all proposed.
+      </template>
+      <template v-else>
+        This repository does not state anything in the places projects usually write these
+        down: a decision record, or a conventions section in a contributing guide.
+      </template>
+    </p>
+
     <EmptyMachine v-if="repositories.length === 0" />
 
     <UiCard v-else-if="items.length === 0" class="text-center py-16 px-6">
@@ -120,10 +162,17 @@ onMounted(async () => {
         Why a thing is the way it is outlives the code that does it. Write one down and every
         agent reading this repository over MCP gets it too.
       </p>
-      <UiButton variant="glow" @click="open(null)">
-        <Plus class="mr-2 h-4 w-4" />
-        Record something
-      </UiButton>
+      <div class="flex items-center justify-center gap-2">
+        <UiButton variant="glow" @click="open(null)">
+          <Plus class="mr-2 h-4 w-4" />
+          Record something
+        </UiButton>
+        <UiButton variant="outline" :disabled="reading" @click="initialize">
+          <Loader2 v-if="reading" class="mr-2 h-4 w-4 animate-spin" />
+          <Sparkles v-else class="mr-2 h-4 w-4" />
+          Read what the repo states
+        </UiButton>
+      </div>
     </UiCard>
 
     <div v-else class="grid gap-3">
