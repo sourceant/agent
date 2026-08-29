@@ -21,6 +21,7 @@ type stubReader struct {
 	askedFor        string
 	askedOptions    core.GraphOptions
 	askedEverything bool
+	askedUpdate     bool
 	registered      core.Repository
 	recorded        core.Knowledge
 	forgot          string
@@ -48,9 +49,10 @@ func (s *stubReader) Forget(_ context.Context, path string) error {
 	return s.err
 }
 
-func (s *stubReader) Index(_ context.Context, repository string, everything bool) ([]core.Indexed, error) {
+func (s *stubReader) Index(_ context.Context, repository string, everything, update bool) ([]core.Indexed, error) {
 	s.askedFor = repository
 	s.askedEverything = everything
+	s.askedUpdate = update
 	return s.indexed, s.err
 }
 

@@ -23,8 +23,14 @@ export const api = {
     call('/api/repositories', { method: 'POST', body: JSON.stringify({ path, name }) }),
   dropRepository: (path) =>
     call(`/api/repositories?${query({ path })}`, { method: 'DELETE' }),
-  index: (repository = '', everything = false) =>
-    call('/api/index', { method: 'POST', body: JSON.stringify({ repository, everything }) }),
+  /* Update reads only what changed, which is what a watcher wants. Somebody
+   * pressing a button for this means read it again: how a file is read changes
+   * with the indexer, and an update pass sees an unchanged file and skips it. */
+  index: (repository = '', { everything = false, update = false } = {}) =>
+    call('/api/index', {
+      method: 'POST',
+      body: JSON.stringify({ repository, everything, update }),
+    }),
 
   graph: (repository, { includeTests = false, pathPrefix = '' } = {}) =>
     call(`/api/graph?${query({ repository, include_tests: includeTests, path_prefix: pathPrefix })}`),

@@ -41,7 +41,7 @@ async function add() {
   problem.value = ''
   try {
     await api.addRepository(listing.value.path, name.value.trim())
-    await api.index('', true)
+    await api.index('', { everything: true })
     emit('added')
     emit('close')
   } catch (error) {

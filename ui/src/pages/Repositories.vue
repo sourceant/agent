@@ -12,6 +12,10 @@ const { repositories, error, fetchRepositories } = useRepositories()
 const counts = ref({})
 const working = ref('')
 const picking = ref(false)
+// What the last read found, so pressing the button says something. Reading a
+// repository that has not changed reports nothing changed, which is a result;
+// showing no result at all is indistinguishable from the button not working.
+const lastRead = ref({})
 
 async function countAll() {
   for (const repository of repositories.value) {
@@ -33,13 +37,20 @@ async function refresh() {
 async function reindex(name) {
   working.value = name
   try {
-    await api.index(name)
+    const [read] = await api.index(name)
+    lastRead.value = { ...lastRead.value, [name]: read }
     error.value = ''
   } catch (problem) {
     error.value = problem.message
   }
   working.value = ''
   await countAll()
+}
+
+function readingSaid(read) {
+  if (!read) return ''
+  if (read.indexed) return `Read ${read.indexed.toLocaleString()} files just now.`
+  return 'Nothing had changed.'
 }
 
 async function drop(repository) {
@@ -99,8 +110,11 @@ onMounted(refresh)
                   <Link2 class="h-3.5 w-3.5" />{{ counts[repository.name].links.toLocaleString() }} links
                 </span>
               </template>
-              <span v-else-if="counts[repository.name] === null">Not indexed yet. Re-index to read it.</span>
+              <span v-else-if="counts[repository.name] === null">Not read yet. Re-index to read it.</span>
               <span v-else>Reading…</span>
+              <span v-if="lastRead[repository.name]" class="text-primary">
+                {{ readingSaid(lastRead[repository.name]) }}
+              </span>
             </div>
           </div>
           <div class="flex shrink-0 items-center gap-1">

@@ -177,13 +177,18 @@ type Indexed struct {
 
 // Index reads repositories into the graph, one or all of them.
 //
+// Update reads only what changed since last time, which is what a watcher
+// wants. Somebody who asked for this in as many words usually means read it
+// again: how a file is read changes with the indexer, and an update pass sees
+// an unchanged file and skips it.
+//
 // The core answers when the reading is done, so this takes as long as the
 // repository is large. The caller's context is what bounds it.
-func (c *Client) Index(ctx context.Context, repository string, everything bool) ([]Indexed, error) {
+func (c *Client) Index(ctx context.Context, repository string, everything, update bool) ([]Indexed, error) {
 	return send[[]Indexed](ctx, c, http.MethodPost, "/api/code/index", nil, map[string]any{
 		"repository": repository,
 		"everything": everything,
-		"update":     true,
+		"update":     update,
 	})
 }
 

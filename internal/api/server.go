@@ -26,7 +26,7 @@ type Reader interface {
 	Graph(ctx context.Context, repository string, opts core.GraphOptions) (core.Graph, error)
 	Register(ctx context.Context, path, name string) (core.Repository, error)
 	Forget(ctx context.Context, path string) error
-	Index(ctx context.Context, repository string, everything bool) ([]core.Indexed, error)
+	Index(ctx context.Context, repository string, everything, update bool) ([]core.Indexed, error)
 	Knowledge(ctx context.Context, repository string, limit, offset int) (core.KnowledgePage, error)
 	RecordKnowledge(ctx context.Context, repository string, item core.Knowledge) (core.Knowledge, error)
 	ForgetKnowledge(ctx context.Context, repository, id string) error
@@ -168,11 +168,14 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Repository string `json:"repository"`
 		Everything bool   `json:"everything"`
+		// Update reads only what changed. Asking for none of it means read it
+		// again, which is what somebody pressing a button for it means.
+		Update bool `json:"update"`
 	}
 	if !readBody(w, r, &body) {
 		return
 	}
-	done, err := s.reader.Index(r.Context(), body.Repository, body.Everything)
+	done, err := s.reader.Index(r.Context(), body.Repository, body.Everything, body.Update)
 	if err != nil {
 		fail(w, err)
 		return
