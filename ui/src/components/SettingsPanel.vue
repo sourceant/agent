@@ -6,8 +6,8 @@ import {
   Button as UiButton,
   Field,
   Input,
+  ListInput,
   Select,
-  Textarea,
 } from '@sourceant/design'
 import { api } from '~/api'
 
@@ -39,8 +39,21 @@ const mine = computed(() => settings.value.filter((s) => s.group === props.group
 
 function shown(setting) {
   // A credential is never read back, so there is nothing to put in the box.
-  return setting.secret ? '' : (setting.value ?? '')
+  if (setting.secret) return ''
+  if (setting.listed) {
+    return String(setting.value ?? '')
+      .split('\n')
+      .map((one) => one.trim())
+      .filter(Boolean)
+  }
+  return setting.value ?? ''
 }
+
+// Stored one to a line, which is what a string setting can hold.
+const written = (setting, value) => (setting.listed ? (value ?? []).join('\n') : value)
+
+const same = (setting, value) =>
+  String(written(setting, value) ?? '') === String(setting.value ?? '')
 
 // A key already set stays set until somebody types a new one, so an empty box
 // is not a change.
@@ -48,7 +61,7 @@ const changed = computed(() =>
   mine.value.some((setting) => {
     const value = draft.value[setting.key]
     if (setting.secret) return !!value
-    return String(value ?? '') !== String(setting.value ?? '')
+    return !same(setting, value)
   }),
 )
 
@@ -73,8 +86,8 @@ async function save() {
     for (const setting of mine.value) {
       const value = draft.value[setting.key]
       if (setting.secret && !value) continue
-      if (!setting.secret && String(value ?? '') === String(setting.value ?? '')) continue
-      await api.setSetting(setting.key, value)
+      if (!setting.secret && same(setting, value)) continue
+      await api.setSetting(setting.key, written(setting, value))
     }
     await load()
     saved.value = true
@@ -151,13 +164,12 @@ onMounted(load)
           <span class="text-muted-foreground">{{ draft[setting.key] ? 'On' : 'Off' }}</span>
         </label>
 
-        <Textarea
-          v-else-if="setting.multiline"
-          :id="setting.key"
+        <ListInput
+          v-else-if="setting.listed"
           v-model="draft[setting.key]"
-          rows="4"
-          class="font-mono"
-          :placeholder="String(setting.default ?? '')"
+          mono
+          noun="a folder"
+          placeholder="/home/you/work/knowledgebase/skills"
         />
 
         <Input

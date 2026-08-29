@@ -29,8 +29,8 @@ import { api } from '~/api'
  */
 
 const REPOSITORY = 'repository'
-const MACHINE = 'machine'
-const OURS = [REPOSITORY, MACHINE]
+const GLOBAL = 'global'
+const OURS = [REPOSITORY, GLOBAL]
 
 const router = useRouter()
 const { repositories, chosen, error, fetchRepositories } = useRepositories()
@@ -41,7 +41,7 @@ const where = ref('all')
 const wheres = [
   { id: 'all', label: 'All' },
   { id: REPOSITORY, label: 'This repository' },
-  { id: MACHINE, label: 'Global' },
+  { id: GLOBAL, label: 'Everywhere' },
   { id: 'agents', label: 'Your coding agents' },
 ]
 
@@ -49,7 +49,7 @@ const shown = computed(() => {
   const wanted = term.value.trim().toLowerCase()
   return skills.value.filter((skill) => {
     if (where.value === REPOSITORY && skill.origin !== REPOSITORY) return false
-    if (where.value === MACHINE && skill.origin !== MACHINE) return false
+    if (where.value === GLOBAL && skill.origin !== GLOBAL) return false
     if (where.value === 'agents' && OURS.includes(skill.origin)) return false
     if (!wanted) return true
     return (
@@ -61,7 +61,7 @@ const shown = computed(() => {
 
 const ours = (skill) => OURS.includes(skill.origin)
 const home = (skill) =>
-  skill.origin === MACHINE ? 'global' : skill.origin === REPOSITORY ? 'this repository' : skill.origin
+  skill.origin === GLOBAL ? 'everywhere' : skill.origin === REPOSITORY ? chosen.value : skill.origin
 
 async function load() {
   try {
@@ -77,7 +77,11 @@ async function load() {
 async function forget(skill) {
   if (!confirm(`Forget ${skill.name}?\n\nThe file is removed from ${home(skill)}.`)) return
   try {
-    await api.forgetSkill(chosen.value, skill.origin, skill.id)
+    await api.forgetSkill(
+      skill.origin === GLOBAL ? '' : chosen.value,
+      skill.origin,
+      skill.id,
+    )
     await load()
   } catch (caught) {
     error.value = caught.message
@@ -109,7 +113,7 @@ onMounted(async () => {
           <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input v-model="term" size="sm" placeholder="Find a skill" class="w-48 pl-8" aria-label="Find a skill" />
         </div>
-        <UiButton v-if="repositories.length" size="sm" variant="glow" @click="router.push('/skills/new')">
+        <UiButton v-if="repositories.length" size="sm" variant="glow" @click="router.push({ path: '/skills/new', query: { for: chosen } })">
           <Plus class="mr-2 h-4 w-4" />
           Write one down
         </UiButton>
@@ -165,12 +169,12 @@ onMounted(async () => {
         <ScrollText class="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
         <p class="font-medium">Nothing written down here yet.</p>
         <p class="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">
-          A skill says when it applies and what it says to do. This repository's live in its
-          <code class="font-mono">.sourceant/skills</code>, so the team gets them by pulling;
-          this machine's live in <code class="font-mono">~/.sourceant/skills</code>. Anything you
-          already taught Claude or Codex is read from their own folders.
+          A skill says when it applies and what it says to do. Anything you have already taught
+          Claude or Codex is read from their own folders, and anything your team committed is read
+          from the repository. What you write here is kept beside the index rather than in
+          anybody's checkout.
         </p>
-        <UiButton class="mt-4" variant="glow" @click="router.push('/skills/new')">
+        <UiButton class="mt-4" variant="glow" @click="router.push({ path: '/skills/new', query: { for: chosen } })">
           <Plus class="mr-2 h-4 w-4" />
           Write one down
         </UiButton>

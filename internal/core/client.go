@@ -468,9 +468,10 @@ type Setting struct {
 	Choices     []string `json:"choices"`
 	Group       string   `json:"group"`
 	Secret      bool     `json:"secret"`
-	// Multiline is a list of things, one to a line, so a screen gives it room.
-	Multiline bool  `json:"multiline"`
-	IsSet     *bool `json:"is_set"`
+	// Listed is several of something rather than one thing, kept one to a
+	// line, so a screen draws it as a list rather than as a box of text.
+	Listed bool  `json:"listed"`
+	IsSet  *bool `json:"is_set"`
 }
 
 // Settings is everything configurable on this machine.

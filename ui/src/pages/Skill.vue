@@ -5,6 +5,7 @@ import {
   Card as UiCard,
   Field,
   Input,
+  ListInput,
   Markdown,
   PageHead,
   Select,
@@ -24,17 +25,22 @@ import { api } from '~/api'
  * text, the rendering beside it on a wide screen and behind a tab on a narrow
  * one, and nothing modal in the way.
  *
- * It goes in one of two places. A repository, when it is about that project and
- * the team should get it by pulling. This machine, when it is how you work
- * everywhere. A skill kept in a coding agent's own folder opens read-only,
- * because those files are that agent's and are frequently a link into a
- * checkout of their own; saving writes a copy into one of ours instead.
+ * Who it is for is one control naming the destination, rather than a scope
+ * that reads the repository somebody happened to be filtering by. That is how
+ * a skill ends up filed against a project nobody meant, and the person who
+ * filed it has no way of telling from the screen.
+ *
+ * Nothing is written into anybody's repository. A folder appearing in a
+ * checkout because a tool was opened turns up in their `git status` and in a
+ * review nobody asked for. A skill kept in a coding agent's own folder, or
+ * committed by a team, opens read-only for the same reason: those files are
+ * theirs. Saving keeps a copy of ours instead.
  */
 
 const NEW = 'new'
 const REPOSITORY = 'repository'
-const MACHINE = 'machine'
-const OURS = [REPOSITORY, MACHINE]
+const GLOBAL = 'global'
+const OURS = [REPOSITORY, GLOBAL]
 
 const route = useRoute()
 const router = useRouter()
@@ -44,8 +50,10 @@ const id = computed(() => String(route.params.id ?? ''))
 const fresh = computed(() => id.value === NEW)
 
 const skill = ref(null)
-const draft = ref({ id: '', name: '', description: '', body: '', paths: '', reviews: null })
-const scope = ref(REPOSITORY)
+const draft = ref({ id: '', name: '', description: '', body: '', paths: [], reviews: null })
+// Either GLOBAL, or the name of the repository it is for. One value, so
+// there is no second place for the destination to come from.
+const belongsTo = ref(GLOBAL)
 const pane = ref('write')
 const saving = ref(false)
 const saved = ref(false)
@@ -71,10 +79,18 @@ const saying = computed(() => {
   return 'Picked when what it says matches what a change touches.'
 })
 
-const scopes = computed(() => [
-  { id: REPOSITORY, label: chosen.value || 'This repository' },
-  { id: MACHINE, label: 'Global' },
+const savedInto = computed(() =>
+  forEverything.value
+    ? 'Kept on this machine and read for every repository you work in.'
+    : `Kept on this machine and read for ${belongsTo.value}. Nothing is written into the checkout.`,
+)
+
+const belongings = computed(() => [
+  { id: GLOBAL, label: 'Everywhere' },
+  ...repositories.value.map((one) => ({ id: one.name, label: one.name })),
 ])
+
+const forEverything = computed(() => belongsTo.value === GLOBAL)
 
 // A skill in a coding agent's own folder is read, never written. Saving makes a
 // copy of ours, which is then the one that gets used.
@@ -88,39 +104,36 @@ const changed = computed(() => {
     draft.value.name !== skill.value.name ||
     draft.value.description !== skill.value.description ||
     draft.value.body !== (skill.value.body ?? '') ||
-    draft.value.paths !== (skill.value.paths ?? []).join('\n') ||
+    draft.value.paths.join('\n') !== (skill.value.paths ?? []).join('\n') ||
     draft.value.reviews !== skill.value.reviews
   )
 })
 
 const lines = computed(() => (draft.value.body ? draft.value.body.split('\n').length : 0))
 
-const savedInto = computed(() =>
-  scope.value === MACHINE
-    ? 'Saved on this machine, so it applies to every repository you work in.'
-    : `Saved into ${chosen.value} as a file, so the team gets it by pulling.`,
-)
-
 async function load() {
   loading.value = true
   problem.value = ''
   if (fresh.value) {
     skill.value = null
-    draft.value = { id: '', name: '', description: '', body: '', paths: '', reviews: null }
-    scope.value = route.query.scope === MACHINE ? MACHINE : REPOSITORY
+    draft.value = { id: '', name: '', description: '', body: '', paths: [], reviews: null }
+    // What the list was showing, so writing one for the project being
+    // looked at takes no thought, and is still named on the screen.
+    belongsTo.value = route.query.for || chosen.value || GLOBAL
     loading.value = false
     return
   }
   try {
     const found = await api.skill(id.value, chosen.value)
     skill.value = found
-    scope.value = found.origin === MACHINE ? MACHINE : REPOSITORY
+    belongsTo.value =
+      found.origin === REPOSITORY ? chosen.value : found.origin === GLOBAL ? GLOBAL : chosen.value || GLOBAL
     draft.value = {
       id: found.id.split('/').pop(),
       name: found.name,
       description: found.description,
       body: found.body ?? '',
-      paths: (found.paths ?? []).join('\n'),
+      paths: [...(found.paths ?? [])],
       reviews: found.reviews,
     }
   } catch (caught) {
@@ -136,13 +149,13 @@ async function save() {
   problem.value = ''
   try {
     const written = await api.recordSkill({
-      scope: scope.value,
-      repository: scope.value === REPOSITORY ? chosen.value : '',
+      scope: forEverything.value ? GLOBAL : REPOSITORY,
+      repository: forEverything.value ? '' : belongsTo.value,
       id: draft.value.id || draft.value.name,
       name: draft.value.name || draft.value.id,
       description: draft.value.description,
       body: draft.value.body,
-      paths: draft.value.paths.split('\n').map((one) => one.trim()).filter(Boolean),
+      paths: draft.value.paths,
       reviews: draft.value.reviews,
     })
     saved.value = true
@@ -159,10 +172,14 @@ async function save() {
 }
 
 async function forget() {
-  const from = scope.value === MACHINE ? 'global' : chosen.value
-  if (!confirm(`Forget ${draft.value.name}?\n\nThe file is removed from ${from}.`)) return
+  const from = forEverything.value ? 'everywhere' : belongsTo.value
+  if (!confirm(`Forget ${draft.value.name}?\n\nIt stops being read for ${from}.`)) return
   try {
-    await api.forgetSkill(chosen.value, scope.value, id.value)
+    await api.forgetSkill(
+      forEverything.value ? '' : belongsTo.value,
+      forEverything.value ? GLOBAL : REPOSITORY,
+      id.value,
+    )
     router.push('/skills')
   } catch (caught) {
     problem.value = caught.message
@@ -192,7 +209,7 @@ onMounted(async () => {
       <template #icon><ScrollText class="h-5 w-5" /></template>
       <template #badges>
         <UiBadge v-if="skill" :variant="theirs ? 'outline' : 'success'">
-          {{ theirs ? skill.origin : scope === MACHINE ? 'global' : 'this repository' }}
+          {{ theirs ? skill.origin : forEverything ? 'everywhere' : belongsTo }}
         </UiBadge>
       </template>
       <template #actions>
@@ -209,7 +226,7 @@ onMounted(async () => {
         <UiButton size="sm" :disabled="saving || !changed" @click="save">
           <Loader2 v-if="saving" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
           <component :is="copying ? Copy : Check" v-else class="mr-1.5 h-3.5 w-3.5" />
-          {{ copying ? `Save into ${scope === MACHINE ? 'global' : chosen}` : 'Save' }}
+          {{ copying ? 'Save your own copy' : 'Save' }}
         </UiButton>
       </template>
     </PageHead>
@@ -218,9 +235,9 @@ onMounted(async () => {
       v-if="copying"
       class="mb-4 rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm"
     >
-      This one belongs to your coding agent, kept wherever it keeps its own, so editing it here
-      would change a file outside this repository. Saving writes a copy where you choose below,
-      and the copy is then the one that gets used.
+      This one is not ours to change: it belongs to your coding agent, or your team committed
+      it to the repository. Saving keeps a copy of our own, for whatever you choose below, and
+      the copy is then the one that gets used.
     </p>
 
     <p v-if="problem" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
@@ -244,19 +261,19 @@ onMounted(async () => {
           />
         </Field>
         <Field
-          label="Where it belongs"
-          for="skill-scope"
-          :hint="scope === MACHINE
-            ? 'Kept on this machine, so it applies to every repository you work in.'
-            : 'Kept in the repository as a file, so the team gets it by pulling.'"
+          label="Used for"
+          for="skill-belongs"
+          :hint="forEverything
+            ? 'Read for every repository you work in.'
+            : 'Read only when reviewing that repository.'"
         >
           <Select
-            id="skill-scope"
-            v-model="scope"
+            id="skill-belongs"
+            v-model="belongsTo"
             :disabled="!!skill && !theirs"
             class="w-full"
           >
-            <option v-for="one in scopes" :key="one.id" :value="one.id">{{ one.label }}</option>
+            <option v-for="one in belongings" :key="one.id" :value="one.id">{{ one.label }}</option>
           </Select>
         </Field>
         <Field
@@ -279,12 +296,12 @@ onMounted(async () => {
           hint="Globs, one to a line. Named here, a change is read against this only when it
                 touches one of them, whatever the wording says. Left empty, the wording decides."
         >
-          <Textarea
-            id="skill-paths"
+          <ListInput
             v-model="draft.paths"
-            rows="3"
-            class="font-mono"
-            placeholder="db/migrations/**&#10;**/*.sql"
+            mono
+            size="sm"
+            noun="a pattern"
+            placeholder="db/migrations/**"
           />
         </Field>
 
