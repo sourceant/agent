@@ -1,11 +1,13 @@
 <script setup>
 import { Button as UiButton, Card as UiCard, ItemCard, PageHead } from '@sourceant/design'
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { Boxes, Plus, Trash2, RefreshCw, FileCode, Link2, Folder, Loader2 } from 'lucide-vue-next'
 import FolderPicker from '~/components/FolderPicker.vue'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
 
+const router = useRouter()
 const { repositories, error, fetchRepositories } = useRepositories()
 const counts = ref({})
 const working = ref('')
@@ -97,6 +99,9 @@ onMounted(refresh)
         :key="repository.path"
         :title="repository.name"
         :subtitle="repository.path"
+        hover
+        class="cursor-pointer"
+        @click="router.push(`/repositories/${repository.name}`)"
       >
         <template #icon><Folder class="h-5 w-5" /></template>
         <template #meta>
@@ -119,13 +124,13 @@ onMounted(refresh)
             variant="outline"
             size="sm"
             :disabled="working === repository.name"
-            @click="reindex(repository.name)"
+            @click.stop="reindex(repository.name)"
           >
             <Loader2 v-if="working === repository.name" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
             <RefreshCw v-else class="mr-1.5 h-3.5 w-3.5" />
             {{ working === repository.name ? 'Reading…' : 'Re-index' }}
           </UiButton>
-          <UiButton variant="ghost" size="icon" :aria-label="`Remove ${repository.name}`" @click="drop(repository)">
+          <UiButton variant="ghost" size="icon" :aria-label="`Remove ${repository.name}`" @click.stop="drop(repository)">
             <Trash2 class="h-4 w-4" />
           </UiButton>
         </template>

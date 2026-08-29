@@ -5,6 +5,7 @@ import Overview from '~/pages/Overview.vue'
 import Graph from '~/pages/Graph.vue'
 import Knowledge from '~/pages/Knowledge.vue'
 import Repositories from '~/pages/Repositories.vue'
+import Repository from '~/pages/Repository.vue'
 import Reviews from '~/pages/Reviews.vue'
 import Skills from '~/pages/Skills.vue'
 import SettingsPage from '~/pages/Settings.vue'
@@ -21,6 +22,8 @@ const router = createRouter({
     { path: '/reviews', component: Reviews },
     { path: '/skills', component: Skills },
     { path: '/repositories', component: Repositories },
+    // A name has a slash in it, so the whole tail is the name.
+    { path: '/repositories/:name(.*)', component: Repository },
     { path: '/settings', component: SettingsPage },
     { path: '/:rest(.*)*', redirect: '/' },
   ],

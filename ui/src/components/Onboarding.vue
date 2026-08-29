@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Plus, ArrowRight } from 'lucide-vue-next'
 import { Modal as UiModal, Button as UiButton } from '@sourceant/design'
-import ModelSettings from '~/components/ModelSettings.vue'
+import SettingsPanel from '~/components/SettingsPanel.vue'
 import FolderPicker from '~/components/FolderPicker.vue'
 import { useRepositories } from '~/composables/useRepositories'
 
@@ -73,11 +73,11 @@ onMounted(async () => {
         all. Proposing what nobody wrote down does. Your key stays on this machine and goes
         to that provider and nowhere else.
       </p>
-      <ModelSettings @saved="remember">
+      <SettingsPanel group="Model" @saved="remember">
         <template #after>
           <UiButton variant="ghost" @click="remember">Not now</UiButton>
         </template>
-      </ModelSettings>
+      </SettingsPanel>
     </template>
   </UiModal>
 </template>

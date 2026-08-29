@@ -29,6 +29,7 @@ type stubReader struct {
 	oneSkill        core.Skill
 	reviewed        core.Review
 	asked           core.Ask
+	stated          core.Stated
 	settings        []core.Setting
 	setKey          string
 	setValue        any
@@ -99,6 +100,22 @@ func (s *stubReader) Skill(_ context.Context, id, repository string) (core.Skill
 	s.askedFor = repository
 	s.forgot = id
 	return s.oneSkill, s.err
+}
+
+func (s *stubReader) ResetSetting(_ context.Context, key string) (core.Setting, error) {
+	s.setKey = key
+	return core.Setting{Key: key}, s.err
+}
+
+func (s *stubReader) RecordSkill(_ context.Context, stated core.Stated) (core.Skill, error) {
+	s.stated = stated
+	return core.Skill{ID: stated.ID, Name: stated.Name}, s.err
+}
+
+func (s *stubReader) ForgetSkill(_ context.Context, repository, id string) error {
+	s.askedFor = repository
+	s.forgot = id
+	return s.err
 }
 
 func (s *stubReader) Review(_ context.Context, ask core.Ask) (core.Review, error) {

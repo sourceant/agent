@@ -73,6 +73,7 @@ async function checkModel() {
 async function run(useModel) {
   const flag = useModel ? judging : running
   flag.value = true
+  error.value = ''
   try {
     result.value = await api.review(chosen.value, {
       against: against.value,
@@ -80,10 +81,12 @@ async function run(useModel) {
       useModel,
     })
     view.value = useModel ? 'verdicts' : 'changed'
-    error.value = ''
   } catch (caught) {
-    result.value = null
-    error.value = caught.message
+    // What was already read stays on screen. Losing a good reading of the
+    // change because the judging failed is two steps backwards for one problem.
+    error.value = caught.message.includes('fetch')
+      ? 'The agent stopped answering part way through. Nothing was changed; try again.'
+      : caught.message
   } finally {
     flag.value = false
   }

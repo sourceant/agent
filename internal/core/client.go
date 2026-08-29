@@ -92,18 +92,48 @@ func (e *Error) Error() string {
 // NotFound reports whether the core had no such repository registered.
 func (e *Error) NotFound() bool { return e.StatusCode == http.StatusNotFound }
 
+// Patience is how long an ordinary call may take. Reads and writes against a
+// local index answer in milliseconds; anything near this is a core in trouble.
+const Patience = 30 * time.Second
+
+// Working is how long a call that does real work may take. Reading a repository
+// of ten thousand files, or asking a model about five rules one at a time, is
+// minutes rather than seconds, and cutting it off at the ordinary deadline
+// throws away work that was going to succeed.
+const Working = 15 * time.Minute
+
 // Client talks to one core instance.
 type Client struct {
-	baseURL string
-	http    *http.Client
+	baseURL  string
+	http     *http.Client
+	patience time.Duration
 }
 
 // New builds a client for the core serving at baseURL.
+//
+// The deadline is per call rather than on the client itself, because a client
+// deadline caps every call at the shortest one any call needs.
 func New(baseURL string, timeout time.Duration) *Client {
-	return &Client{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		http:    &http.Client{Timeout: timeout},
+	if timeout <= 0 {
+		timeout = Patience
 	}
+	return &Client{
+		baseURL:  strings.TrimRight(baseURL, "/"),
+		http:     &http.Client{},
+		patience: timeout,
+	}
+}
+
+// waiting gives a call a deadline, unless it already has one.
+//
+// A deadline already on the context was set by whoever knows what this call is
+// doing, so it wins: applying the ordinary one on top would cut a fifteen
+// minute review off after thirty seconds.
+func waiting(ctx context.Context, limit time.Duration) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, limit)
 }
 
 // BaseURL is the core this client talks to.
@@ -185,6 +215,8 @@ type Indexed struct {
 // The core answers when the reading is done, so this takes as long as the
 // repository is large. The caller's context is what bounds it.
 func (c *Client) Index(ctx context.Context, repository string, everything, update bool) ([]Indexed, error) {
+	ctx, done := waiting(ctx, Working)
+	defer done()
 	return send[[]Indexed](ctx, c, http.MethodPost, "/api/code/index", nil, map[string]any{
 		"repository": repository,
 		"everything": everything,
@@ -250,6 +282,11 @@ type Seeded struct {
 // written before any of it is. Asking a model as well finds what nobody wrote
 // down, and costs whatever the machine's own model costs.
 func (c *Client) Initialize(ctx context.Context, repository string, dryRun, useModel bool) (Seeded, error) {
+	if useModel {
+		var done context.CancelFunc
+		ctx, done = waiting(ctx, Working)
+		defer done()
+	}
 	return send[Seeded](ctx, c, http.MethodPost, "/api/knowledge/initialize", nil, map[string]any{
 		"repository": repository,
 		"dry_run":    dryRun,
@@ -281,6 +318,30 @@ func (c *Client) Skills(ctx context.Context, repository string) (SkillPage, erro
 // Skill is one rule in full, so a person can read what a check was made against.
 func (c *Client) Skill(ctx context.Context, id, repository string) (Skill, error) {
 	return get[Skill](ctx, c, "/api/skills/"+id, url.Values{"repository": {repository}})
+}
+
+// Stated is a rule somebody is writing down, and the repository it is about.
+type Stated struct {
+	Repository  string `json:"repository"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Body        string `json:"body"`
+}
+
+// RecordSkill states a rule in the repository it is about.
+//
+// Only a repository's own rules are written. What somebody keeps in their agent
+// folders is theirs, and core refuses to write there.
+func (c *Client) RecordSkill(ctx context.Context, stated Stated) (Skill, error) {
+	return send[Skill](ctx, c, http.MethodPut, "/api/skills", nil, stated)
+}
+
+// ForgetSkill removes a rule this repository stated.
+func (c *Client) ForgetSkill(ctx context.Context, repository, id string) error {
+	_, err := send[map[string]any](ctx, c, http.MethodDelete, "/api/skills",
+		url.Values{"repository": {repository}, "id": {id}}, nil)
+	return err
 }
 
 // Finding is one thing a rule says is wrong with a change.
@@ -341,6 +402,11 @@ func (c *Client) Review(ctx context.Context, ask Ask) (Review, error) {
 	if ask.Skills == nil {
 		ask.Skills = []string{}
 	}
+	if ask.UseModel {
+		var done context.CancelFunc
+		ctx, done = waiting(ctx, Working)
+		defer done()
+	}
 	return send[Review](ctx, c, http.MethodPost, "/api/local/reviews", nil, ask)
 }
 
@@ -372,6 +438,12 @@ func (c *Client) SetSetting(ctx context.Context, key string, value any) (Setting
 		nil, map[string]any{"value": value})
 }
 
+// ResetSetting puts one setting back to what it would be if nobody had touched it.
+func (c *Client) ResetSetting(ctx context.Context, key string) (Setting, error) {
+	return send[Setting](ctx, c, http.MethodDelete,
+		"/api/local/settings/"+url.PathEscape(key), nil, nil)
+}
+
 // ForgetKnowledge removes something recorded.
 func (c *Client) ForgetKnowledge(ctx context.Context, repository, id string) error {
 	_, err := send[map[string]any](ctx, c, http.MethodDelete, "/api/knowledge",
@@ -394,6 +466,9 @@ func send[T any](ctx context.Context, c *Client, method, path string, query url.
 		}
 		body = bytes.NewReader(encoded)
 	}
+
+	ctx, done := waiting(ctx, c.patience)
+	defer done()
 
 	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
@@ -431,6 +506,9 @@ func get[T any](ctx context.Context, c *Client, path string, query url.Values) (
 	if len(query) > 0 {
 		target += "?" + query.Encode()
 	}
+	ctx, done := waiting(ctx, c.patience)
+	defer done()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return zero, err

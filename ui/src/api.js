@@ -55,6 +55,11 @@ export const api = {
    * this machine's agent folders and from the repository's own. */
   skills: (repository = '') => call(`/api/skills?${query({ repository })}`),
   skill: (id, repository = '') => call(`/api/skills/${id}?${query({ repository })}`),
+  /* Only a repository's own are written. What somebody keeps in their agent
+   * folders is theirs, and the core refuses to write there. */
+  recordSkill: (skill) => call('/api/skills', { method: 'PUT', body: JSON.stringify(skill) }),
+  forgetSkill: (repository, id) =>
+    call(`/api/skills?${query({ repository, id })}`, { method: 'DELETE' }),
 
   /* Reading a checkout's own work before anybody else has been asked to. Asking
    * without a model is the free half: what changed and which rules bear on it,
@@ -68,4 +73,5 @@ export const api = {
   settings: () => call('/api/settings'),
   setSetting: (key, value) =>
     call('/api/settings', { method: 'PUT', body: JSON.stringify({ key, value }) }),
+  resetSetting: (key) => call(`/api/settings?${query({ key })}`, { method: 'DELETE' }),
 }

@@ -33,9 +33,12 @@ type Reader interface {
 	Initialize(ctx context.Context, repository string, dryRun, useModel bool) (core.Seeded, error)
 	Skills(ctx context.Context, repository string) (core.SkillPage, error)
 	Skill(ctx context.Context, id, repository string) (core.Skill, error)
+	RecordSkill(ctx context.Context, stated core.Stated) (core.Skill, error)
+	ForgetSkill(ctx context.Context, repository, id string) error
 	Review(ctx context.Context, ask core.Ask) (core.Review, error)
 	Settings(ctx context.Context) ([]core.Setting, error)
 	SetSetting(ctx context.Context, key string, value any) (core.Setting, error)
+	ResetSetting(ctx context.Context, key string) (core.Setting, error)
 }
 
 // Supervision is the part of the supervisor this server reports on.
@@ -85,8 +88,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/knowledge/initialize", s.initialize)
 	mux.HandleFunc("GET /api/settings", s.settings)
 	mux.HandleFunc("PUT /api/settings", s.setSetting)
+	mux.HandleFunc("DELETE /api/settings", s.resetSetting)
 	mux.HandleFunc("GET /api/skills", s.skills)
 	mux.HandleFunc("GET /api/skills/{id...}", s.skill)
+	mux.HandleFunc("PUT /api/skills", s.recordSkill)
+	mux.HandleFunc("DELETE /api/skills", s.forgetSkill)
 	mux.HandleFunc("POST /api/reviews", s.review)
 	mux.HandleFunc("GET /api/browse", s.browse)
 	mux.Handle("GET /", ui.Handler())
@@ -303,6 +309,37 @@ func (s *Server) skill(w http.ResponseWriter, r *http.Request) {
 	write(w, http.StatusOK, found)
 }
 
+func (s *Server) recordSkill(w http.ResponseWriter, r *http.Request) {
+	var stated core.Stated
+	if !readBody(w, r, &stated) {
+		return
+	}
+	if stated.Repository == "" || stated.ID == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a repository and a rule"})
+		return
+	}
+	written, err := s.reader.RecordSkill(r.Context(), stated)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, written)
+}
+
+func (s *Server) forgetSkill(w http.ResponseWriter, r *http.Request) {
+	repository := r.URL.Query().Get("repository")
+	id := r.URL.Query().Get("id")
+	if repository == "" || id == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a repository and a rule"})
+		return
+	}
+	if err := s.reader.ForgetSkill(r.Context(), repository, id); err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]string{"id": id})
+}
+
 func (s *Server) review(w http.ResponseWriter, r *http.Request) {
 	var ask core.Ask
 	if !readBody(w, r, &ask) {
@@ -357,6 +394,20 @@ func (s *Server) setSetting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setting, err := s.reader.SetSetting(r.Context(), body.Key, body.Value)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, setting)
+}
+
+func (s *Server) resetSetting(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a setting"})
+		return
+	}
+	setting, err := s.reader.ResetSetting(r.Context(), key)
 	if err != nil {
 		fail(w, err)
 		return
