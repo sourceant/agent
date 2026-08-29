@@ -68,5 +68,8 @@ func drawable(reviewed core.Review) core.Review {
 	if reviewed.Verdicts == nil {
 		reviewed.Verdicts = []core.Verdict{}
 	}
+	if reviewed.Read.Suggestions == nil {
+		reviewed.Read.Suggestions = []core.Suggestion{}
+	}
 	return reviewed
 }

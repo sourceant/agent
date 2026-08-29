@@ -5,17 +5,22 @@ import {
   Card as UiCard,
   Chip,
   Diff,
+  ItemCard,
+  Markdown,
   Notice,
   PageHead,
   Select,
+  Tabs,
 } from '@sourceant/design'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Check,
+  Clock,
   FileCode,
   GitBranch,
   Loader2,
+  Plus,
   ShieldCheck,
   TriangleAlert,
   Wand2,
@@ -44,6 +49,8 @@ const looking = ref('')
 const picked = ref([])
 const adding = ref('')
 const skills = ref([])
+const past = ref([])
+const tab = ref('overview')
 
 const files = computed(() => result.value?.changed ?? [])
 
@@ -80,7 +87,7 @@ const blocking = computed(() => findings.value.filter((one) => one.severity === 
 const advisory = computed(() => findings.value.filter((one) => one.severity !== 'blocking'))
 
 // Said about the file somebody is looking at, so the diff can draw it in place.
-const notesFor = (path) => findings.value.filter((one) => one.path === path)
+
 
 // How loudly a file is asking to be looked at, so the worst sorts first.
 const weight = computed(() => {
@@ -88,6 +95,9 @@ const weight = computed(() => {
   for (const one of findings.value) {
     if (!one.path) continue
     by[one.path] = (by[one.path] ?? 0) + (one.severity === 'blocking' ? 10 : 1)
+  }
+  for (const one of suggestions.value) {
+    by[one.path] = (by[one.path] ?? 0) + 1
   }
   return by
 })
@@ -105,6 +115,62 @@ const showing = computed(
 // Anything said about no file in particular: a commit message, a missing
 // description. That belongs at the top, not against a line of code.
 const overall = computed(() => findings.value.filter((one) => !one.path))
+
+// The review proper, as opposed to what the skills made of it.
+const read = computed(() => result.value?.review ?? null)
+const summary = computed(() => read.value?.summary ?? null)
+const suggestions = computed(() => read.value?.suggestions ?? [])
+
+const VERDICTS = {
+  APPROVE: { label: 'Looks good', tone: 'success' },
+  REQUEST_CHANGES: { label: 'Change this first', tone: 'danger' },
+  COMMENT: { label: 'Worth a look', tone: 'warning' },
+}
+const verdict = computed(() => VERDICTS[read.value?.verdict] ?? null)
+
+const tabs = computed(() => [
+  { id: 'overview', label: 'Overview' },
+  {
+    id: 'details',
+    label: `Files${files.value.length ? ` ${files.value.length}` : ''}`,
+  },
+])
+
+// A suggestion is about a line, so it is drawn against that line beside
+// whatever a skill said about the same place.
+const notesOn = (path) => [
+  ...findings.value
+    .filter((one) => one.path === path)
+    .map((one) => ({ ...one, from: one.skill })),
+  ...suggestions.value
+    .filter((one) => one.path === path)
+    .map((one) => ({
+      line: one.start_line,
+      severity: 'suggestion',
+      detail: one.comment,
+      code: one.suggested_code,
+      from: one.category || 'review',
+    })),
+]
+
+async function loadPast() {
+  try {
+    past.value = await api.reviews(chosen.value)
+  } catch {
+    past.value = []
+  }
+}
+
+function when(stamp) {
+  if (!stamp) return ''
+  const at = new Date(stamp)
+  const ago = Math.round((Date.now() - at.getTime()) / 60000)
+  if (ago < 1) return 'just now'
+  if (ago < 60) return `${ago} minute${ago === 1 ? '' : 's'} ago`
+  const hours = Math.round(ago / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  return at.toLocaleDateString()
+}
 
 async function checkModel() {
   try {
@@ -180,6 +246,8 @@ async function collect(id, useModel = true) {
   }
   result.value = answered.review
   looking.value = ''
+  tab.value = 'overview'
+  loadPast()
   if (answered.repository) chosen.value = answered.repository
   // What it was actually read against, so removing one and running again is
   // the obvious next move rather than a form to fill in.
@@ -189,6 +257,7 @@ async function collect(id, useModel = true) {
 watch(chosen, () => {
   stopAsking()
   loadSkills()
+  loadPast()
 })
 
 // A link somebody was handed opens the review it names.
@@ -202,7 +271,7 @@ onUnmounted(stopAsking)
 
 onMounted(async () => {
   await fetchRepositories()
-  await Promise.all([checkModel(), loadSkills()])
+  await Promise.all([checkModel(), loadSkills(), loadPast()])
   if (named.value) await collect(named.value)
 })
 </script>
@@ -283,26 +352,71 @@ onMounted(async () => {
         Choose a model in Settings to have the work read against your skills.
       </Notice>
 
-      <UiCard
-        v-if="!result"
-        class="flex flex-1 flex-col items-center justify-center p-12 text-center"
-      >
-        <template v-if="reading?.status === 'running'">
+      <template v-if="!result">
+        <UiCard
+          v-if="reading?.status === 'running'"
+          class="flex flex-1 flex-col items-center justify-center p-12 text-center"
+        >
           <Loader2 class="mb-3 h-8 w-8 animate-spin text-muted-foreground" />
           <p class="font-medium">Reading it.</p>
           <p class="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
             This keeps going whether or not anybody is watching, and the link to it keeps working.
           </p>
-        </template>
+        </UiCard>
+
         <template v-else>
-          <ShieldCheck class="mb-3 h-8 w-8 text-muted-foreground" />
-          <p class="font-medium">Nothing read yet.</p>
-          <p class="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Everything comes off this checkout, so work you have not pushed, or not committed,
-            still gets an answer.
-          </p>
+          <UiCard class="mb-3 p-8 text-center">
+            <ShieldCheck class="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+            <p class="font-medium">Read this checkout's work.</p>
+            <p class="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+              Everything comes off the checkout, so work you have not pushed, or not committed,
+              still gets a review.
+            </p>
+            <UiButton
+              v-if="repositories.length && hasModel"
+              class="mt-4"
+              variant="glow"
+              :disabled="judging"
+              @click="run(true)"
+            >
+              <Loader2 v-if="judging" class="mr-2 h-4 w-4 animate-spin" />
+              <Plus v-else class="mr-2 h-4 w-4" />
+              Review it
+            </UiButton>
+          </UiCard>
+
+          <!-- Older ones, because a review has a name and somebody may have
+               been handed one, or run one this morning. -->
+          <template v-if="past.length">
+            <p class="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Earlier</p>
+            <div class="space-y-2">
+              <ItemCard
+                v-for="one in past"
+                :key="one.id"
+                :title="one.title || one.repository"
+                :subtitle="one.id"
+                pillar="review"
+                hover
+                class="cursor-pointer"
+                @click="router.push(`/reviews/${one.id}`)"
+              >
+                <template #icon><Clock class="h-5 w-5" /></template>
+                <template #badges>
+                  <UiBadge
+                    :variant="one.status === 'done' ? 'success' : one.status === 'failed' ? 'destructive' : 'secondary'"
+                  >
+                    {{ one.status }}
+                  </UiBadge>
+                </template>
+                <template #meta>
+                  <span>{{ when(one.started) }}</span>
+                  <span class="font-mono">{{ one.repository }}</span>
+                </template>
+              </ItemCard>
+            </div>
+          </template>
         </template>
-      </UiCard>
+      </template>
 
       <template v-else>
         <!-- What is being reviewed, against what, and how it went. -->
@@ -373,7 +487,73 @@ onMounted(async () => {
           <span class="text-muted-foreground">— {{ one.skill }}</span>
         </Notice>
 
-        <div class="grid min-h-0 flex-1 gap-3 lg:grid-cols-[18rem_1fr]">
+        <Tabs v-model="tab" :tabs="tabs" label="What to look at" class="mb-3 w-fit" />
+
+        <!-- The review, in the order somebody reads one. -->
+        <div v-if="tab === 'overview'" class="min-h-0 flex-1 space-y-3 overflow-y-auto">
+          <UiCard v-if="summary?.overview" class="p-5">
+            <div class="mb-2 flex flex-wrap items-center gap-2">
+              <h2 class="font-semibold">What this change does</h2>
+              <UiBadge v-if="verdict" :variant="verdict.tone === 'danger' ? 'destructive' : verdict.tone">
+                {{ verdict.label }}
+              </UiBadge>
+            </div>
+            <Markdown :source="summary.overview" />
+          </UiCard>
+
+          <UiCard v-if="summary?.critical_issues?.length" class="border-destructive/40 p-5">
+            <h2 class="mb-2 font-semibold">Worth stopping for</h2>
+            <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              <li v-for="(one, index) in summary.critical_issues" :key="index">{{ one }}</li>
+            </ul>
+          </UiCard>
+
+          <UiCard v-if="summary?.key_improvements?.length" class="p-5">
+            <h2 class="mb-2 font-semibold">Worth changing</h2>
+            <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              <li v-for="(one, index) in summary.key_improvements" :key="index">{{ one }}</li>
+            </ul>
+          </UiCard>
+
+          <UiCard v-if="summary?.minor_suggestions?.length" class="p-5">
+            <h2 class="mb-2 font-semibold">Nice to have</h2>
+            <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              <li v-for="(one, index) in summary.minor_suggestions" :key="index">{{ one }}</li>
+            </ul>
+          </UiCard>
+
+          <UiCard v-if="suggestions.length" class="p-5">
+            <h2 class="mb-1 font-semibold">
+              {{ suggestions.length }} suggestion{{ suggestions.length === 1 ? '' : 's' }}
+            </h2>
+            <p class="mb-3 text-sm text-muted-foreground">
+              Each one is drawn against the line it is about, under Files.
+            </p>
+            <ul class="space-y-1.5 text-sm">
+              <li v-for="(one, index) in suggestions" :key="index">
+                <button
+                  type="button"
+                  class="text-left hover:underline"
+                  @click="looking = one.path; tab = 'details'"
+                >
+                  <span class="font-mono text-xs">{{ one.path }}:{{ one.start_line }}</span>
+                  <span class="ml-2 text-muted-foreground">{{ one.comment }}</span>
+                </button>
+              </li>
+            </ul>
+          </UiCard>
+
+          <UiCard v-for="(text, name) in read?.notes ?? {}" :key="name" class="p-5">
+            <h2 class="mb-2 font-semibold capitalize">{{ name.replace(/_/g, ' ') }}</h2>
+            <Markdown :source="text" />
+          </UiCard>
+
+          <UiCard v-if="!summary?.overview" class="p-8 text-center text-sm text-muted-foreground">
+            {{ result.note || 'Read, not judged. Ask for a review to have it read properly.' }}
+          </UiCard>
+        </div>
+
+        <div v-else class="grid min-h-0 flex-1 gap-3 lg:grid-cols-[18rem_1fr]">
           <!-- The change on the left, the way a pull request lists it. -->
           <UiCard class="flex min-h-0 flex-col overflow-hidden">
             <div class="border-b px-3 py-2 text-xs uppercase tracking-wider text-muted-foreground">
@@ -391,10 +571,10 @@ onMounted(async () => {
                     {{ file.path }}
                   </span>
                   <UiBadge
-                    v-if="notesFor(file.path).length"
+                    v-if="notesOn(file.path).length"
                     :variant="weight[file.path] >= 10 ? 'destructive' : 'secondary'"
                   >
-                    {{ notesFor(file.path).length }}
+                    {{ notesOn(file.path).length }}
                   </UiBadge>
                   <span class="shrink-0 text-[10px] uppercase text-muted-foreground">
                     {{ file.change.slice(0, 3) }}
@@ -412,7 +592,7 @@ onMounted(async () => {
                 <span class="break-all font-mono text-sm">{{ showing.path }}</span>
                 <UiBadge variant="secondary">{{ showing.change }}</UiBadge>
               </div>
-              <Diff :patch="showing.patch" :notes="notesFor(showing.path)" />
+              <Diff :patch="showing.patch" :notes="notesOn(showing.path)" />
             </template>
             <UiCard v-else class="p-10 text-center text-sm text-muted-foreground">
               Nothing has changed in this checkout.

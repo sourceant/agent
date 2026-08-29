@@ -447,6 +447,34 @@ type Where struct {
 	Commits int    `json:"commits"`
 }
 
+// Suggestion is one thing to change, and the code to put there.
+type Suggestion struct {
+	Path          string `json:"path"`
+	StartLine     int    `json:"start_line"`
+	EndLine       int    `json:"end_line"`
+	Side          string `json:"side"`
+	Comment       string `json:"comment"`
+	Category      string `json:"category"`
+	SuggestedCode string `json:"suggested_code"`
+}
+
+// Summary is the review in the order a person reads it.
+type Summary struct {
+	Overview         string   `json:"overview"`
+	KeyImprovements  []string `json:"key_improvements"`
+	MinorSuggestions []string `json:"minor_suggestions"`
+	CriticalIssues   []string `json:"critical_issues"`
+}
+
+// Read is the review proper: the same one the hosted path gives a pull
+// request, from the same generator.
+type Read struct {
+	Verdict     string            `json:"verdict"`
+	Summary     Summary           `json:"summary"`
+	Suggestions []Suggestion      `json:"suggestions"`
+	Notes       map[string]string `json:"notes"`
+}
+
 // Review is whether a checkout's work is ready to be proposed to anyone.
 type Review struct {
 	Ready     bool          `json:"ready"`
@@ -457,6 +485,8 @@ type Review struct {
 	Skills    []Skill       `json:"skills"`
 	Knowledge []Recorded    `json:"knowledge"`
 	Verdicts  []Verdict     `json:"verdicts"`
+	// The review itself, as opposed to what the skills made of it.
+	Read Read `json:"review"`
 }
 
 // Ask is what to review and how.
