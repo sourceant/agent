@@ -3,6 +3,7 @@ import {
   Badge as UiBadge,
   Button as UiButton,
   Card as UiCard,
+  Notice,
   PageHead,
   Tabs,
 } from '@sourceant/design'
@@ -67,9 +68,9 @@ onMounted(async () => {
       </template>
     </PageHead>
 
-    <p v-if="problem" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+    <Notice v-if="problem" tone="danger" class="mb-4">
       {{ problem }}
-    </p>
+    </Notice>
 
     <template v-if="tab === OVERVIEW">
       <UiCard class="mb-3 p-5">

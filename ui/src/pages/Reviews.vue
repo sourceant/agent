@@ -6,6 +6,7 @@ import {
   Field,
   Input,
   ItemCard,
+  Notice,
   PageHead,
   Select,
   Tabs,
@@ -174,9 +175,9 @@ onMounted(async () => {
       </template>
     </PageHead>
 
-    <p v-if="error" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+    <Notice v-if="error" tone="danger" class="mb-4">
       {{ error }}
-    </p>
+    </Notice>
 
     <EmptyMachine v-if="repositories.length === 0" />
 
@@ -198,14 +199,11 @@ onMounted(async () => {
         </Field>
       </UiCard>
 
-      <p
-        v-if="!hasModel"
-        class="mb-6 rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm"
-      >
+      <Notice v-if="!hasModel" tone="info" class="mb-6">
         No model is configured, so nothing here can be judged. Reading what changed, and what
         applies to it, needs nothing. Choose a model in Settings to have the work read against
         your skills.
-      </p>
+      </Notice>
 
       <template v-if="result">
         <UiCard

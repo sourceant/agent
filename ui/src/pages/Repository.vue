@@ -4,6 +4,7 @@ import {
   Button as UiButton,
   Card as UiCard,
   ItemCard,
+  Notice,
   PageHead,
   Tabs,
 } from '@sourceant/design'
@@ -145,9 +146,9 @@ onMounted(async () => {
       </template>
     </PageHead>
 
-    <p v-if="error" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+    <Notice v-if="error" tone="danger" class="mb-4">
       {{ error }}
-    </p>
+    </Notice>
 
     <Tabs v-model="tab" :tabs="tabs" label="What to look at" class="mb-4 w-fit" />
 

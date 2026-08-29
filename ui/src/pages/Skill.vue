@@ -7,6 +7,7 @@ import {
   Input,
   ListInput,
   Markdown,
+  Notice,
   PageHead,
   Select,
   Tabs,
@@ -231,18 +232,15 @@ onMounted(async () => {
       </template>
     </PageHead>
 
-    <p
-      v-if="copying"
-      class="mb-4 rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm"
-    >
+    <Notice v-if="copying" tone="info" class="mb-4">
       This one is not ours to change: it belongs to your coding agent, or your team committed
       it to the repository. Saving keeps a copy of our own, for whatever you choose below, and
       the copy is then the one that gets used.
-    </p>
+    </Notice>
 
-    <p v-if="problem" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+    <Notice v-if="problem" tone="danger" class="mb-4">
       {{ problem }}
-    </p>
+    </Notice>
 
     <p v-if="loading" class="py-10 text-center text-sm text-muted-foreground">Reading it.</p>
 

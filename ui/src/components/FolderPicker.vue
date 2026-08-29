@@ -1,5 +1,12 @@
 <script setup>
-import { Badge as UiBadge, Button as UiButton, Field, Input, Modal as UiModal } from '@sourceant/design'
+import {
+  Badge as UiBadge,
+  Button as UiButton,
+  Field,
+  Input,
+  Modal as UiModal,
+  Notice,
+} from '@sourceant/design'
 import { ref, watch } from 'vue'
 import { Folder, ChevronUp, Plus, Loader2 } from 'lucide-vue-next'
 import { api } from '~/api'
@@ -86,9 +93,9 @@ async function add() {
     <p class="mt-2 text-xs text-muted-foreground">
       Adding <code class="font-mono">{{ listing?.path }}</code>
     </p>
-    <p v-if="problem" class="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+    <Notice v-if="problem" tone="danger" class="mt-3">
       {{ problem }}
-    </p>
+    </Notice>
 
     <div class="flex items-center gap-2 pt-5">
       <UiButton :disabled="busy || !listing" @click="add">

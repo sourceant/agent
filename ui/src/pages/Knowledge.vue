@@ -7,6 +7,7 @@ import {
   Input,
   ItemCard,
   Modal as UiModal,
+  Notice,
   PageHead,
   Select,
   Textarea,
@@ -165,11 +166,11 @@ onMounted(async () => {
       </template>
     </PageHead>
 
-    <p v-if="error" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+    <Notice v-if="error" tone="danger" class="mb-4">
       {{ error }}
-    </p>
+    </Notice>
 
-    <p v-if="readOff !== null" class="mb-4 rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
+    <Notice v-if="readOff !== null" tone="info" class="mb-4">
       <template v-if="readOff">
         Read {{ readOff }} thing{{ readOff === 1 ? '' : 's' }} this repository already states.
         Nobody has agreed to any of it, so it is all proposed.
@@ -178,7 +179,7 @@ onMounted(async () => {
         This repository does not state anything in the places projects usually write these
         down: a decision record, or a conventions section in a contributing guide.
       </template>
-    </p>
+    </Notice>
 
     <EmptyMachine v-if="repositories.length === 0" />
 
@@ -216,12 +217,35 @@ onMounted(async () => {
         </dl>
 
         <template #actions>
-          <UiButton variant="ghost" size="icon" aria-label="Edit" @click="open(item)">
-            <Pencil class="h-4 w-4" />
-          </UiButton>
-          <UiButton variant="ghost" size="icon" aria-label="Remove" @click="forget(item)">
-            <Trash2 class="h-4 w-4" />
-          </UiButton>
+          <template v-if="item.status === PROPOSED">
+            <UiButton
+              variant="outline"
+              size="sm"
+              :disabled="deciding === item.id"
+              :aria-label="`Accept ${item.id}`"
+              @click="decide(item, ACCEPTED)"
+            >
+              <Loader2 v-if="deciding === item.id" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              <Check v-else class="mr-1.5 h-3.5 w-3.5" />
+              Accept
+            </UiButton>
+            <UiButton
+              variant="ghost"
+              size="icon"
+              :aria-label="`Throw out ${item.id}`"
+              @click="decide(item, null)"
+            >
+              <X class="h-4 w-4" />
+            </UiButton>
+          </template>
+          <template v-else>
+            <UiButton variant="ghost" size="icon" aria-label="Edit" @click="open(item)">
+              <Pencil class="h-4 w-4" />
+            </UiButton>
+            <UiButton variant="ghost" size="icon" aria-label="Remove" @click="forget(item)">
+              <Trash2 class="h-4 w-4" />
+            </UiButton>
+          </template>
         </template>
       </ItemCard>
     </div>
@@ -243,9 +267,9 @@ onMounted(async () => {
         <Field label="Why" hint="What stops somebody undoing it next year.">
           <Textarea v-model="draft.why" placeholder="The provider rate limits after four." />
         </Field>
-        <p v-if="problem" class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+        <Notice v-if="problem" tone="danger">
           {{ problem }}
-        </p>
+        </Notice>
         <div class="flex items-center gap-2 pt-2">
           <UiButton :disabled="saving" @click="save">
             <Check class="mr-1.5 h-3.5 w-3.5" />

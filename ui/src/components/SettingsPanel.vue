@@ -7,6 +7,7 @@ import {
   Field,
   Input,
   ListInput,
+  Notice,
   Select,
 } from '@sourceant/design'
 import { api } from '~/api'
@@ -188,9 +189,9 @@ onMounted(load)
         Nothing in this group is configurable here.
       </p>
 
-      <p v-if="problem" class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
+      <Notice v-if="problem" tone="danger">
         {{ problem }}
-      </p>
+      </Notice>
 
       <div v-if="mine.length" class="flex items-center gap-3">
         <UiButton :disabled="saving || !changed" @click="save">

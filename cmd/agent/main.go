@@ -74,6 +74,11 @@ func run() error {
 	server := api.New(client, supervisor, Version, coreURL)
 	go func() { served <- server.Serve(ctx, cfg.Listen) }()
 
+	// A repository read once answers about last month, so it is read again on
+	// whatever schedule somebody set. This is the process that is always up,
+	// which is what makes it the one to do it.
+	go server.Keep(ctx)
+
 	fmt.Fprintf(os.Stderr, "sourceant-agent %s listening on %s, core on %s (%s)\n",
 		Version, cfg.Listen, coreURL, installed.Describe())
 

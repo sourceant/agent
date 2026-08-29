@@ -1,5 +1,11 @@
 <script setup>
-import { Button as UiButton, Card as UiCard, ItemCard, PageHead } from '@sourceant/design'
+import {
+  Button as UiButton,
+  Card as UiCard,
+  ItemCard,
+  Notice,
+  PageHead,
+} from '@sourceant/design'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Boxes, Plus, Trash2, RefreshCw, FileCode, Link2, Folder, Loader2 } from 'lucide-vue-next'
@@ -78,9 +84,9 @@ onMounted(refresh)
       </template>
     </PageHead>
 
-    <p v-if="error" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+    <Notice v-if="error" tone="danger" class="mb-4">
       {{ error }}
-    </p>
+    </Notice>
 
     <UiCard v-if="repositories.length === 0" class="text-center py-16 px-6">
       <h2 class="text-lg font-semibold mb-1">No folders yet</h2>

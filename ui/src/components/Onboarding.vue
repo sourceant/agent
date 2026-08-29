@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { Plus, ArrowRight } from 'lucide-vue-next'
-import { Modal as UiModal, Button as UiButton } from '@sourceant/design'
+import { Button as UiButton, Modal as UiModal } from '@sourceant/design'
 import SettingsPanel from '~/components/SettingsPanel.vue'
 import FolderPicker from '~/components/FolderPicker.vue'
 import { useRepositories } from '~/composables/useRepositories'

@@ -1,5 +1,12 @@
 <script setup>
-import { Badge as UiBadge, Button as UiButton, Card as UiCard, ItemCard, PageHead } from '@sourceant/design'
+import {
+  Badge as UiBadge,
+  Button as UiButton,
+  Card as UiCard,
+  ItemCard,
+  Notice,
+  PageHead,
+} from '@sourceant/design'
 import { onMounted, ref, computed } from 'vue'
 import { LayoutDashboard, FileCode, Lightbulb, Folder } from 'lucide-vue-next'
 import EmptyMachine from '~/components/EmptyMachine.vue'
@@ -39,9 +46,9 @@ onMounted(async () => {
       <template #icon><LayoutDashboard class="h-6 w-6" /></template>
     </PageHead>
 
-    <p v-if="error" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+    <Notice v-if="error" tone="danger" class="mb-4">
       {{ error }}
-    </p>
+    </Notice>
 
     <EmptyMachine v-if="!error && repositories.length === 0" />
 

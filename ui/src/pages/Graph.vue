@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import { Network } from 'lucide-vue-next'
-import { PageHead, Select } from '@sourceant/design'
+import { Notice, PageHead, Select } from '@sourceant/design'
 import GraphWorkbench from '~/components/GraphWorkbench.vue'
 import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'
@@ -27,9 +27,9 @@ onMounted(fetchRepositories)
       </template>
     </PageHead>
 
-    <p v-if="error" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+    <Notice v-if="error" tone="danger" class="mb-4">
       {{ error }}
-    </p>
+    </Notice>
 
     <EmptyMachine v-if="repositories.length === 0" />
 
