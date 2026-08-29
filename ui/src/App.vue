@@ -1,4 +1,5 @@
 <script setup>
+import { Avatar as UiAvatar, Logo as UiLogo } from '@sourceant/design'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -14,8 +15,6 @@ import {
 } from 'lucide-vue-next'
 import { createAvatar } from '@dicebear/core'
 import { notionists } from '@dicebear/collection'
-import { Logo as UiLogo } from '@sourceant/design'
-import { Avatar as UiAvatar } from '@sourceant/design'
 import { useTheme } from '~/composables/useTheme'
 import Onboarding from '~/components/Onboarding.vue'
 

@@ -1,9 +1,7 @@
 <script setup>
+import { Badge as UiBadge, Button as UiButton, Field, Input, Modal as UiModal } from '@sourceant/design'
 import { ref, watch } from 'vue'
 import { Folder, ChevronUp, Plus, Loader2 } from 'lucide-vue-next'
-import { Modal as UiModal } from '@sourceant/design'
-import { Button as UiButton } from '@sourceant/design'
-import { Badge as UiBadge } from '@sourceant/design'
 import { api } from '~/api'
 
 /* A browser will not tell a page the absolute path of a folder somebody picked:
@@ -81,17 +79,9 @@ async function add() {
       </p>
     </div>
 
-    <div class="mt-4">
-      <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block" for="repo-name">
-        Name it (optional)
-      </label>
-      <input
-        id="repo-name"
-        v-model="name"
-        placeholder="Taken from the git remote, or the folder name"
-        class="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm outline-none focus:border-primary/50 text-foreground"
-      >
-    </div>
+    <Field label="Name it (optional)" for="repo-name" class="mt-4">
+      <Input id="repo-name" v-model="name" placeholder="Taken from the git remote, or the folder name" />
+    </Field>
 
     <p class="mt-2 text-xs text-muted-foreground">
       Adding <code class="font-mono">{{ listing?.path }}</code>

@@ -1,10 +1,9 @@
 <script setup lang="ts">
+import { CodeGraph as KnowledgeGraph, Tabs, useContextKinds } from '@sourceant/design'
 import { computed, ref, watch } from 'vue'
 import { Crosshair, Network, Search, X } from 'lucide-vue-next'
 import type { KnowledgeGraphData } from '~/types'
-import { CodeGraph as KnowledgeGraph } from '@sourceant/design'
 import { useCodeGraph, useRepos } from '~/composables/useCodeGraph'
-import { useContextKinds } from '@sourceant/design'
 
 /**
  * The graph, its controls and whatever reads what was picked on it.
@@ -287,16 +286,7 @@ defineExpose({ reload: loadGraph })
 
       <div v-if="offers('layouts')">
         <p class="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Shape</p>
-        <div class="grid grid-cols-2 gap-1">
-          <button
-            v-for="m in modes"
-            :key="m.id"
-            type="button"
-            class="rounded px-2 py-1 text-xs font-medium transition-colors"
-            :class="mode === m.id ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
-            @click="mode = m.id"
-          >{{ m.label }}</button>
-        </div>
+        <Tabs v-model="mode" :tabs="modes" label="Shape" class="grid w-full grid-cols-2" />
       </div>
 
       <div v-if="offers('depth')">

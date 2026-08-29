@@ -1,11 +1,18 @@
 <script setup>
+import {
+  Badge as UiBadge,
+  Button as UiButton,
+  Card as UiCard,
+  Field,
+  Input,
+  ItemCard,
+  Modal as UiModal,
+  PageHead,
+  Select,
+  Textarea,
+} from '@sourceant/design'
 import { onMounted, ref, watch } from 'vue'
 import { Lightbulb, Plus, Pencil, Trash2, Check, Sparkles, Loader2, Wand2 } from 'lucide-vue-next'
-import { Card as UiCard } from '@sourceant/design'
-import { Button as UiButton } from '@sourceant/design'
-import { Badge as UiBadge } from '@sourceant/design'
-import { Modal as UiModal } from '@sourceant/design'
-import PageHead from '~/components/PageHead.vue'
 import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
@@ -121,23 +128,14 @@ onMounted(async () => {
 
 <template>
   <div>
-    <PageHead
-      :icon="Lightbulb"
-      pillar="memory"
-      title="Knowledge"
-      sub="The decisions, conventions and constraints behind this code."
-    >
+    <PageHead pillar="memory" title="Knowledge" sub="The decisions, conventions and constraints behind this code.">
+      <template #icon><Lightbulb class="h-6 w-6" /></template>
       <template #actions>
-        <select
-          v-if="repositories.length > 1"
-          v-model="chosen"
-          class="rounded-md border bg-card px-3 py-1.5 text-sm"
-          aria-label="Repository"
-        >
+        <Select v-if="repositories.length > 1" v-model="chosen" aria-label="Repository">
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
           </option>
-        </select>
+        </Select>
         <UiButton
           v-if="repositories.length"
           variant="outline"
@@ -202,74 +200,47 @@ onMounted(async () => {
     </UiCard>
 
     <div v-else class="grid gap-3">
-      <UiCard v-for="item in items" :key="item.id" class="p-5">
-        <div class="flex items-start gap-4">
-          <div class="h-11 w-11 shrink-0 rounded-lg bg-pillar-memory/15 text-pillar-memory flex items-center justify-center">
-            <Lightbulb class="h-5 w-5" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <div class="flex flex-wrap items-center gap-2 mb-1">
-              <h3 class="font-semibold break-all">{{ item.id }}</h3>
-              <UiBadge variant="secondary">{{ item.kind }}</UiBadge>
-              <UiBadge v-if="item.status" variant="outline">{{ item.status }}</UiBadge>
-            </div>
-            <p class="text-sm text-muted-foreground">{{ item.summary }}</p>
-            <dl v-if="item.properties?.why" class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-              <dt class="text-muted-foreground">why</dt>
-              <dd class="font-mono break-all">{{ item.properties.why }}</dd>
-            </dl>
-          </div>
-          <div class="flex shrink-0 items-center gap-1">
-            <UiButton variant="ghost" size="icon" aria-label="Edit" @click="open(item)">
-              <Pencil class="h-4 w-4" />
-            </UiButton>
-            <UiButton variant="ghost" size="icon" aria-label="Remove" @click="forget(item)">
-              <Trash2 class="h-4 w-4" />
-            </UiButton>
-          </div>
-        </div>
-      </UiCard>
+      <ItemCard v-for="item in items" :key="item.id" :title="item.id" pillar="memory">
+        <template #icon><Lightbulb class="h-5 w-5" /></template>
+        <template #badges>
+          <UiBadge variant="secondary">{{ item.kind }}</UiBadge>
+          <UiBadge v-if="item.status" variant="outline">{{ item.status }}</UiBadge>
+        </template>
+
+        <p class="text-sm text-muted-foreground">{{ item.summary }}</p>
+        <dl v-if="item.properties?.why" class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          <dt class="text-muted-foreground">why</dt>
+          <dd class="break-all font-mono">{{ item.properties.why }}</dd>
+        </dl>
+
+        <template #actions>
+          <UiButton variant="ghost" size="icon" aria-label="Edit" @click="open(item)">
+            <Pencil class="h-4 w-4" />
+          </UiButton>
+          <UiButton variant="ghost" size="icon" aria-label="Remove" @click="forget(item)">
+            <Trash2 class="h-4 w-4" />
+          </UiButton>
+        </template>
+      </ItemCard>
     </div>
 
     <UiModal :open="!!editing" max-width="xl" @close="editing = null">
       <h2 class="text-lg font-semibold mb-4">{{ editing?.fresh ? 'Record something' : 'Edit' }}</h2>
       <div class="space-y-4">
-        <div>
-          <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Name</label>
-          <input
-            v-model="draft.id"
-            :readonly="!editing?.fresh"
-            placeholder="retry-limit"
-            class="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm outline-none focus:border-primary/50 text-foreground"
-          >
-        </div>
-        <div>
-          <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Kind</label>
-          <select
-            v-model="draft.kind"
-            class="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm outline-none focus:border-primary/50 text-foreground"
-          >
+        <Field label="Name" hint="What this will be called, and how it is found again.">
+          <Input v-model="draft.id" :readonly="!editing?.fresh" placeholder="retry-limit" />
+        </Field>
+        <Field label="Kind">
+          <Select v-model="draft.kind" class="w-full">
             <option v-for="kind in KINDS" :key="kind">{{ kind }}</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">What is true</label>
-          <textarea
-            v-model="draft.summary"
-            rows="3"
-            placeholder="Charges retry three times, then stop."
-            class="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm outline-none focus:border-primary/50 text-foreground"
-          />
-        </div>
-        <div>
-          <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Why</label>
-          <textarea
-            v-model="draft.why"
-            rows="3"
-            placeholder="The provider rate limits after four."
-            class="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm outline-none focus:border-primary/50 text-foreground"
-          />
-        </div>
+          </Select>
+        </Field>
+        <Field label="What is true">
+          <Textarea v-model="draft.summary" placeholder="Charges retry three times, then stop." />
+        </Field>
+        <Field label="Why" hint="What stops somebody undoing it next year.">
+          <Textarea v-model="draft.why" placeholder="The provider rate limits after four." />
+        </Field>
         <p v-if="problem" class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
           {{ problem }}
         </p>

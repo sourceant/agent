@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { Check, Loader2 } from 'lucide-vue-next'
-import { Button as UiButton, Badge as UiBadge } from '@sourceant/design'
+import { Badge as UiBadge, Button as UiButton, Field, Input } from '@sourceant/design'
 import { api } from '~/api'
 
 /* Whose model, and whose bill.
@@ -67,50 +67,34 @@ onMounted(load)
 
 <template>
   <div class="space-y-4">
-    <div>
-      <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block" for="model-name">
-        Model
-      </label>
-      <input
-        id="model-name"
-        v-model="draft['model.name']"
-        placeholder="anthropic/claude-sonnet-4-5"
-        class="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm outline-none focus:border-primary/50 text-foreground"
-      >
-      <p class="mt-1 text-xs text-muted-foreground">
-        Named the way the provider names it.
-      </p>
-    </div>
+    <Field label="Model" for="model-name" hint="Named the way the provider names it.">
+      <Input id="model-name" v-model="draft['model.name']" placeholder="anthropic/claude-sonnet-4-5" />
+    </Field>
 
-    <div>
-      <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-2" for="model-key">
-        API key
+    <Field
+      label="API key"
+      for="model-key"
+      hint="Kept on this machine, sent to that provider and nowhere else, and never shown again."
+    >
+      <template #label>
         <UiBadge v-if="key?.is_set" variant="success">set</UiBadge>
-      </label>
-      <input
+      </template>
+      <Input
         id="model-key"
         v-model="draft['model.api_key']"
         type="password"
         autocomplete="off"
         :placeholder="key?.is_set ? 'Leave empty to keep the key you have' : 'Your key for that provider'"
-        class="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm outline-none focus:border-primary/50 text-foreground"
-      >
-      <p class="mt-1 text-xs text-muted-foreground">
-        Kept on this machine, sent to that provider and nowhere else, and never shown again.
-      </p>
-    </div>
+      />
+    </Field>
 
-    <div>
-      <label class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block" for="model-endpoint">
-        Endpoint
-      </label>
-      <input
+    <Field label="Endpoint" for="model-endpoint">
+      <Input
         id="model-endpoint"
         v-model="draft['model.base_url']"
         placeholder="Left empty unless the model runs somewhere of its own"
-        class="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm outline-none focus:border-primary/50 text-foreground"
-      >
-    </div>
+      />
+    </Field>
 
     <p v-if="problem" class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm">
       {{ problem }}

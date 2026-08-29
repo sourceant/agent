@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import { Network } from 'lucide-vue-next'
-import PageHead from '~/components/PageHead.vue'
+import { PageHead, Select } from '@sourceant/design'
 import GraphWorkbench from '~/components/GraphWorkbench.vue'
 import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'
@@ -16,18 +16,14 @@ onMounted(fetchRepositories)
 
 <template>
   <div class="flex h-full min-h-0 flex-col">
-    <PageHead :icon="Network" title="Graphs" sub="Your code, and how it holds together.">
+    <PageHead title="Graphs" sub="Your code, and how it holds together.">
+      <template #icon><Network class="h-6 w-6" /></template>
       <template #actions>
-        <select
-          v-if="repositories.length > 1"
-          v-model="chosen"
-          class="rounded-md border bg-card px-3 py-1.5 text-sm"
-          aria-label="Repository"
-        >
+        <Select v-if="repositories.length > 1" v-model="chosen" aria-label="Repository">
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
           </option>
-        </select>
+        </Select>
       </template>
     </PageHead>
 

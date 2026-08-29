@@ -1,9 +1,7 @@
 <script setup>
+import { Button as UiButton, Card as UiCard, ItemCard, PageHead } from '@sourceant/design'
 import { onMounted, ref } from 'vue'
 import { Boxes, Plus, Trash2, RefreshCw, FileCode, Link2, Folder, Loader2 } from 'lucide-vue-next'
-import { Card as UiCard } from '@sourceant/design'
-import { Button as UiButton } from '@sourceant/design'
-import PageHead from '~/components/PageHead.vue'
 import FolderPicker from '~/components/FolderPicker.vue'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
@@ -68,7 +66,8 @@ onMounted(refresh)
 
 <template>
   <div>
-    <PageHead :icon="Boxes" title="Repositories" sub="The folders SourceAnt reads on this machine.">
+    <PageHead title="Repositories" sub="The folders SourceAnt reads on this machine.">
+      <template #icon><Boxes class="h-6 w-6" /></template>
       <template #actions>
         <UiButton variant="glow" @click="picking = true">
           <Plus class="mr-2 h-4 w-4" />
@@ -93,47 +92,44 @@ onMounted(refresh)
     </UiCard>
 
     <div v-else class="grid gap-3">
-      <UiCard v-for="repository in repositories" :key="repository.path" class="p-5">
-        <div class="flex items-start gap-4">
-          <div class="h-11 w-11 shrink-0 rounded-lg bg-pillar-graph/15 text-pillar-graph flex items-center justify-center">
-            <Folder class="h-5 w-5" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <h3 class="font-semibold mb-1">{{ repository.name }}</h3>
-            <p class="text-sm text-muted-foreground font-mono break-all">{{ repository.path }}</p>
-            <div class="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
-              <template v-if="counts[repository.name]">
-                <span class="flex items-center gap-1.5">
-                  <FileCode class="h-3.5 w-3.5" />{{ counts[repository.name].files.toLocaleString() }} files
-                </span>
-                <span class="flex items-center gap-1.5">
-                  <Link2 class="h-3.5 w-3.5" />{{ counts[repository.name].links.toLocaleString() }} links
-                </span>
-              </template>
-              <span v-else-if="counts[repository.name] === null">Not read yet. Re-index to read it.</span>
-              <span v-else>Reading…</span>
-              <span v-if="lastRead[repository.name]" class="text-primary">
-                {{ readingSaid(lastRead[repository.name]) }}
-              </span>
-            </div>
-          </div>
-          <div class="flex shrink-0 items-center gap-1">
-            <UiButton
-              variant="outline"
-              size="sm"
-              :disabled="working === repository.name"
-              @click="reindex(repository.name)"
-            >
-              <Loader2 v-if="working === repository.name" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              <RefreshCw v-else class="mr-1.5 h-3.5 w-3.5" />
-              {{ working === repository.name ? 'Reading…' : 'Re-index' }}
-            </UiButton>
-            <UiButton variant="ghost" size="icon" :aria-label="`Remove ${repository.name}`" @click="drop(repository)">
-              <Trash2 class="h-4 w-4" />
-            </UiButton>
-          </div>
-        </div>
-      </UiCard>
+      <ItemCard
+        v-for="repository in repositories"
+        :key="repository.path"
+        :title="repository.name"
+        :subtitle="repository.path"
+      >
+        <template #icon><Folder class="h-5 w-5" /></template>
+        <template #meta>
+          <template v-if="counts[repository.name]">
+            <span class="flex items-center gap-1.5">
+              <FileCode class="h-3.5 w-3.5" />{{ counts[repository.name].files.toLocaleString() }} files
+            </span>
+            <span class="flex items-center gap-1.5">
+              <Link2 class="h-3.5 w-3.5" />{{ counts[repository.name].links.toLocaleString() }} links
+            </span>
+          </template>
+          <span v-else-if="counts[repository.name] === null">Not read yet. Re-index to read it.</span>
+          <span v-else>Reading…</span>
+          <span v-if="lastRead[repository.name]" class="text-primary">
+            {{ readingSaid(lastRead[repository.name]) }}
+          </span>
+        </template>
+        <template #actions>
+          <UiButton
+            variant="outline"
+            size="sm"
+            :disabled="working === repository.name"
+            @click="reindex(repository.name)"
+          >
+            <Loader2 v-if="working === repository.name" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            <RefreshCw v-else class="mr-1.5 h-3.5 w-3.5" />
+            {{ working === repository.name ? 'Reading…' : 'Re-index' }}
+          </UiButton>
+          <UiButton variant="ghost" size="icon" :aria-label="`Remove ${repository.name}`" @click="drop(repository)">
+            <Trash2 class="h-4 w-4" />
+          </UiButton>
+        </template>
+      </ItemCard>
     </div>
 
     <FolderPicker :open="picking" @close="picking = false" @added="refresh" />

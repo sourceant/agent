@@ -1,10 +1,7 @@
 <script setup>
+import { Badge as UiBadge, Button as UiButton, Card as UiCard, PageHead } from '@sourceant/design'
 import { onMounted, ref } from 'vue'
 import { Settings as SettingsIcon, Sun, Moon } from 'lucide-vue-next'
-import { Card as UiCard } from '@sourceant/design'
-import { Button as UiButton } from '@sourceant/design'
-import { Badge as UiBadge } from '@sourceant/design'
-import PageHead from '~/components/PageHead.vue'
 import ModelSettings from '~/components/ModelSettings.vue'
 import { useTheme } from '~/composables/useTheme'
 import { api } from '~/api'
@@ -24,12 +21,9 @@ onMounted(async () => {
 
 <template>
   <div>
-    <PageHead
-      :icon="SettingsIcon"
-      pillar="tokens"
-      title="Settings"
-      sub="What is running, and how this looks."
-    />
+    <PageHead pillar="tokens" title="Settings" sub="What is running, and how this looks.">
+      <template #icon><SettingsIcon class="h-6 w-6" /></template>
+    </PageHead>
 
     <p v-if="problem" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
       {{ problem }}

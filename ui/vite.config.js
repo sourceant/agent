@@ -9,6 +9,10 @@ export default defineConfig({
   base: './',
   resolve: {
     alias: { '~': fileURLToPath(new URL('./src', import.meta.url)) },
+    // The design package is linked from a sibling checkout, so its own imports
+    // have to resolve against this app's dependencies rather than against the
+    // checkout it physically lives in, which installs nothing.
+    preserveSymlinks: true,
   },
   // The design package ships source rather than a build, so it is compiled with
   // the app instead of pre-bundled as a dependency.

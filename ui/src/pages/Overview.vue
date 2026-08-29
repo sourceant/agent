@@ -1,10 +1,7 @@
 <script setup>
+import { Badge as UiBadge, Button as UiButton, Card as UiCard, ItemCard, PageHead } from '@sourceant/design'
 import { onMounted, ref, computed } from 'vue'
 import { LayoutDashboard, FileCode, Lightbulb, Folder } from 'lucide-vue-next'
-import { Card as UiCard } from '@sourceant/design'
-import { Badge as UiBadge } from '@sourceant/design'
-import { Button as UiButton } from '@sourceant/design'
-import PageHead from '~/components/PageHead.vue'
 import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
@@ -38,12 +35,9 @@ onMounted(async () => {
 
 <template>
   <div>
-    <PageHead
-      :icon="LayoutDashboard"
-      pillar="memory"
-      title="Overview"
-      sub="What SourceAnt has on this machine."
-    />
+    <PageHead pillar="memory" title="Overview" sub="What SourceAnt has on this machine.">
+      <template #icon><LayoutDashboard class="h-6 w-6" /></template>
+    </PageHead>
 
     <p v-if="error" class="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
       {{ error }}
@@ -60,31 +54,31 @@ onMounted(async () => {
       </div>
 
       <div class="grid gap-3">
-        <UiCard v-for="item in counted" :key="item.repository.name" hover class="p-5">
-          <div class="flex items-start gap-4">
-            <div class="h-11 w-11 shrink-0 rounded-lg bg-pillar-graph/15 text-pillar-graph flex items-center justify-center">
-              <Folder class="h-5 w-5" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <h3 class="font-semibold">{{ item.repository.name }}</h3>
-                <UiBadge :variant="item.files ? 'success' : 'warning'">
-                  {{ item.files ? 'Indexed' : 'Not indexed' }}
-                </UiBadge>
-              </div>
-              <p class="text-sm text-muted-foreground font-mono break-all">{{ item.repository.path }}</p>
-              <div class="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
-                <span class="flex items-center gap-1.5">
-                  <FileCode class="h-3.5 w-3.5" />{{ item.files.toLocaleString() }} files
-                </span>
-                <span class="flex items-center gap-1.5">
-                  <Lightbulb class="h-3.5 w-3.5" />{{ item.knowledge.toLocaleString() }} recorded
-                </span>
-              </div>
-            </div>
-            <UiButton as="a" href="#/graph" variant="ghost" size="sm" class="shrink-0">Graph</UiButton>
-          </div>
-        </UiCard>
+        <ItemCard
+          v-for="item in counted"
+          :key="item.repository.name"
+          :title="item.repository.name"
+          :subtitle="item.repository.path"
+          hover
+        >
+          <template #icon><Folder class="h-5 w-5" /></template>
+          <template #badges>
+            <UiBadge :variant="item.files ? 'success' : 'warning'">
+              {{ item.files ? 'Indexed' : 'Not indexed' }}
+            </UiBadge>
+          </template>
+          <template #meta>
+            <span class="flex items-center gap-1.5">
+              <FileCode class="h-3.5 w-3.5" />{{ item.files.toLocaleString() }} files
+            </span>
+            <span class="flex items-center gap-1.5">
+              <Lightbulb class="h-3.5 w-3.5" />{{ item.knowledge.toLocaleString() }} recorded
+            </span>
+          </template>
+          <template #actions>
+            <UiButton as="a" href="#/graph" variant="ghost" size="sm">Graph</UiButton>
+          </template>
+        </ItemCard>
       </div>
 
       <p class="mt-4 text-xs text-muted-foreground">
