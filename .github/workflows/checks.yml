@@ -5,55 +5,41 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      # Side by side, because the view depends on the design package by
-      # relative path. Checked out anywhere else that path resolves to nothing.
       - uses: actions/checkout@v4
-        with:
-          path: agent
-
-      - uses: actions/checkout@v4
-        with:
-          repository: sourceant/design
-          path: design
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: agent/go.mod
-          cache-dependency-path: agent/go.sum
+          go-version-file: go.mod
+          cache: true
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      # The design preset imports a peer dependency, and node resolves that
-      # from where the preset lives. Installed as a package it would find the
-      # consumer's copy by walking up; linked by relative path it looks in a
-      # directory with nothing in it. This goes when that dependency is a
-      # version rather than a path.
-      - name: Peer dependencies the design preset resolves from its own folder
-        working-directory: design
-        run: npm install --no-audit --no-fund --no-save @tailwindcss/typography
+          registry-url: https://npm.pkg.github.com
+          scope: '@sourceant'
 
       - name: Formatting
-        working-directory: agent
         run: make fmt-check
 
       - name: Vet
-        working-directory: agent
         run: make vet
 
       - name: Tests
-        working-directory: agent
         run: make test-race
 
       # The view is built before the binary, because the binary embeds it. A
       # build against stale assets proves nothing about the change.
       - name: Build
-        working-directory: agent
         run: |
           make ui-deps
           make build
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
