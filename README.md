@@ -8,11 +8,13 @@ It never parses code. The grammars and the graph shape live in the Python core, 
 
 Starts the core on a free port and waits for it to answer. Restarts it when it dies, backing off as failures repeat. Serves its own HTTP surface on `127.0.0.1:8930`, where `/health` reports whether the core is up and how many times it has been started, and `/api/repositories` and `/api/graph` read the index.
 
-It also serves the local view at `/`: Overview, Knowledge, Graphs, Repositories, Settings. The assets are embedded in the binary, so the view works with no network and cannot drift from the agent serving it.
+It also serves the local view at `/`: Overview, Graph, Knowledge, Reviews, Skills, Repositories, Settings. The assets are embedded in the binary, so the view works with no network and cannot drift from the agent serving it.
 
 The view is Vue, built by Vite from `ui/`: Tailwind for the design tokens, lucide for icons, force-graph in 2D and 3d-force-graph for Tree, Radial, Layered and Force.
 
-There are no reviews here. A review reads a pull request, and nothing on a machine produces one.
+A checkout is reviewed here, by the same reviewer a pull request goes through. It reads the working tree against the branch it would merge into, so a change is read before anybody else sees it. The core does the reading; the agent asks for it and keeps the answer.
+
+`/mcp` is proxied through to the core, so a coding agent on this machine reaches the same index and can ask for the same review.
 
 Loopback is the default because the agent reads a working tree. The machine it runs on is the only audience it has.
 
