@@ -16,6 +16,7 @@ import {
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Check, Copy, Loader2, ScrollText, Trash2 } from 'lucide-vue-next'
+import { useUp } from '~/composables/useUp'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
 
@@ -45,6 +46,7 @@ const OURS = [REPOSITORY, GLOBAL]
 
 const route = useRoute()
 const router = useRouter()
+const up = useUp()
 const { repositories, chosen, fetchRepositories } = useRepositories()
 
 const id = computed(() => String(route.params.id ?? ''))
@@ -203,7 +205,7 @@ onMounted(async () => {
       :mono="!!skill?.path"
     >
       <template #back>
-        <UiButton variant="ghost" size="icon" aria-label="Back to skills" @click="router.push('/skills')">
+        <UiButton variant="ghost" size="icon" aria-label="Back to skills" @click="up('/skills')">
           <ArrowLeft class="h-4 w-4" />
         </UiButton>
       </template>

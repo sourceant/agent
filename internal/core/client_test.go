@@ -199,3 +199,49 @@ func TestHealthyIsFalseWhenTheCoreIsNotThere(t *testing.T) {
 		t.Error("reported a core that is not listening as healthy")
 	}
 }
+
+// Everything the core says about a review has to survive the trip through
+// here. This is decoded into a struct and encoded again on the way out, so a
+// field nobody named is dropped without a word: the commits a branch is ahead
+// by went missing that way, and the page that drew them looked simply empty.
+func TestNothingTheCoreSaysAboutAReviewIsDroppedInTransit(t *testing.T) {
+	client := serving(t, map[string]func(http.ResponseWriter, *http.Request){
+		"/api/local/reviews/abc": func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"data":{
+				"id":"abc","repository":"acme/billing","status":"done",
+				"review":{
+					"where":{"branch":"work","against":"main","commits":18},
+					"commits":[{"sha":"1111111","author":"Nobody","at":"2026-08-29T00:00:00Z","subject":"First","body":"why"}],
+					"changed":[{"path":"a.py","change":"modified","patch":"@@"}],
+					"review":{"verdict":"COMMENT","suggestions":[
+						{"path":"a.py","start_line":2,"comment":"c","category":"BUG",
+						 "existing_code":"was","suggested_code":"is"}
+					]}
+				}
+			}}`))
+		},
+	})
+
+	read, err := client.Reviewed(context.Background(), "abc")
+	if err != nil {
+		t.Fatalf("reading a review: %v", err)
+	}
+
+	if got := len(read.Review.Commits); got != 1 {
+		t.Fatalf("got %d commits, want 1", got)
+	}
+	if got := read.Review.Commits[0].Subject; got != "First" {
+		t.Fatalf("got subject %q, want First", got)
+	}
+	if got := read.Review.Where.Commits; got != 18 {
+		t.Fatalf("got %d commits ahead, want 18", got)
+	}
+
+	suggestions := read.Review.Read.Suggestions
+	if len(suggestions) != 1 {
+		t.Fatalf("got %d suggestions, want 1", len(suggestions))
+	}
+	if got := suggestions[0].ExistingCode; got != "was" {
+		t.Fatalf("got existing code %q, want was", got)
+	}
+}

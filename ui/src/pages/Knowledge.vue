@@ -1,5 +1,7 @@
 <script setup>
 import {
+  Empty,
+  Origin,
   Badge as UiBadge,
   Button as UiButton,
   Card as UiCard,
@@ -13,14 +15,33 @@ import {
   Textarea,
 } from '@sourceant/design'
 import { onMounted, ref, watch } from 'vue'
-import { Lightbulb, Plus, Pencil, Trash2, Check, Sparkles, Loader2, Wand2 } from 'lucide-vue-next'
+import {
+  Boxes,
+  Check,
+  Lightbulb,
+  Loader2,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  Wand2,
+} from 'lucide-vue-next'
 import EmptyMachine from '~/components/EmptyMachine.vue'
-import { useRepositories } from '~/composables/useRepositories'
+import { EVERY, useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
 
 const KINDS = ['decision', 'convention', 'constraint', 'pattern', 'workaround', 'requirement']
 
-const { repositories, chosen, error, fetchRepositories } = useRepositories()
+const { repositories, chosen, error, mixed, fetchRepositories } = useRepositories({
+  all: true,
+})
+
+// Choosing one narrows the page to it. Recording and finding both write into
+// one repository, so they need one named.
+async function narrowTo(name) {
+  if (!name) return
+  chosen.value = name
+}
 const items = ref([])
 const editing = ref(null)
 const draft = ref({ id: '', kind: 'decision', summary: '', why: '' })
@@ -133,36 +154,50 @@ onMounted(async () => {
       <template #icon><Lightbulb class="h-6 w-6" /></template>
       <template #actions>
         <Select v-if="repositories.length > 1" v-model="chosen" size="sm" aria-label="Repository">
+          <option :value="EVERY">All repositories</option>
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
           </option>
         </Select>
         <UiButton
           size="sm"
-          v-if="repositories.length"
+          v-if="repositories.length && chosen"
           variant="outline"
           :disabled="reading"
           @click="initialize"
         >
           <Loader2 v-if="reading" class="mr-2 h-4 w-4 animate-spin" />
           <Sparkles v-else class="mr-2 h-4 w-4" />
-          {{ reading ? 'Reading…' : 'Read what the repo states' }}
+          {{ reading ? 'Finding…' : 'Find in what the repo states' }}
         </UiButton>
         <UiButton
           size="sm"
-          v-if="repositories.length && hasModel"
+          v-if="repositories.length && hasModel && chosen"
           variant="outline"
           :disabled="asking"
           @click="initialize(true)"
         >
           <Loader2 v-if="asking" class="mr-2 h-4 w-4 animate-spin" />
           <Wand2 v-else class="mr-2 h-4 w-4" />
-          {{ asking ? 'Asking…' : 'Ask the model' }}
+          {{ asking ? 'Finding…' : 'Find more with a model' }}
         </UiButton>
-        <UiButton v-if="repositories.length" size="sm" variant="glow" @click="open(null)">
+        <UiButton v-if="repositories.length && chosen" size="sm" variant="glow" @click="open(null)">
           <Plus class="mr-2 h-4 w-4" />
           Record something
         </UiButton>
+
+        <Select
+          v-else-if="repositories.length"
+          :model-value="''"
+          size="sm"
+          aria-label="Choose a repository"
+          @update:model-value="narrowTo"
+        >
+          <option value="">Choose a repository…</option>
+          <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
+            {{ repository.name }}
+          </option>
+        </Select>
       </template>
     </PageHead>
 
@@ -183,13 +218,10 @@ onMounted(async () => {
 
     <EmptyMachine v-if="repositories.length === 0" />
 
-    <UiCard v-else-if="items.length === 0" class="text-center py-16 px-6">
-      <h2 class="text-lg font-semibold mb-1">Nothing recorded yet</h2>
-      <p class="text-muted-foreground text-sm mb-4 max-w-lg mx-auto">
-        Why a thing is the way it is outlives the code that does it. Write one down and every
-        agent reading this repository over MCP gets it too.
-      </p>
-      <div class="flex items-center justify-center gap-2">
+    <Empty v-else-if="items.length === 0" title="Nothing recorded yet">
+      Why a thing is the way it is outlives the code that does it. Write one down and every
+      agent reading this repository over MCP gets it too.
+      <template #actions>
         <UiButton variant="glow" @click="open(null)">
           <Plus class="mr-2 h-4 w-4" />
           Record something
@@ -199,15 +231,23 @@ onMounted(async () => {
           <Sparkles v-else class="mr-2 h-4 w-4" />
           Read what the repo states
         </UiButton>
-      </div>
-    </UiCard>
+      </template>
+    </Empty>
 
     <div v-else class="grid gap-3">
-      <ItemCard v-for="item in items" :key="item.id" :title="item.id" pillar="memory">
+      <ItemCard
+        v-for="item in items"
+        :key="`${item.repository ?? ''}${item.id}`"
+        :title="item.id"
+        pillar="memory"
+      >
         <template #icon><Lightbulb class="h-5 w-5" /></template>
         <template #badges>
           <UiBadge variant="secondary">{{ item.kind }}</UiBadge>
           <UiBadge v-if="item.status" variant="outline">{{ item.status }}</UiBadge>
+          <Origin v-if="mixed && item.repository" :name="item.repository">
+            <template #icon><Boxes class="h-3 w-3" /></template>
+          </Origin>
         </template>
 
         <p class="text-sm text-muted-foreground">{{ item.summary }}</p>

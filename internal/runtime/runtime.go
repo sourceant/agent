@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -143,6 +144,13 @@ func (c Core) Serve(port int) (string, []string, error) {
 			// So a review asked for over MCP can answer with a link somebody
 			// can click, rather than a path they have to assemble.
 			args = append(args, "-e", "SOURCEANT_UI_URL="+c.UIURL)
+			// And a second address for reaching back. The clickable one is
+			// loopback, which inside a container is the container, so handing
+			// work to the agent needs the host's address instead.
+			args = append(args,
+				"--add-host", "host.docker.internal:host-gateway",
+				"-e", "SOURCEANT_AGENT_URL="+throughTheHost(c.UIURL),
+			)
 		}
 		if c.Mount != "" {
 			args = append(args, "-v", c.Mount+":"+c.Mount)
@@ -178,4 +186,26 @@ func (c Core) Describe() string {
 	default:
 		return string(c.Runtime)
 	}
+}
+
+// throughTheHost rewrites a loopback address into one a container can reach.
+//
+// The agent listens on loopback, which is right: nothing else should reach it.
+// A container's loopback is its own, so the same URL means two different
+// machines depending on who reads it.
+func throughTheHost(address string) string {
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return address
+	}
+	host := parsed.Hostname()
+	if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+		return address
+	}
+	if port := parsed.Port(); port != "" {
+		parsed.Host = "host.docker.internal:" + port
+	} else {
+		parsed.Host = "host.docker.internal"
+	}
+	return parsed.String()
 }

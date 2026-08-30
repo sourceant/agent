@@ -10,7 +10,7 @@ import { Plus } from 'lucide-vue-next'
       Point SourceAnt at a folder on this machine and it reads the code into a graph you can
       look at and record against.
     </p>
-    <UiButton as="a" href="#/repositories" variant="glow">
+    <UiButton as="a" href="/repositories" variant="glow">
       <Plus class="mr-2 h-4 w-4" />
       Add a repository
     </UiButton>

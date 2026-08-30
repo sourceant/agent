@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import App from '~/App.vue'
 import Overview from '~/pages/Overview.vue'
 import Graph from '~/pages/Graph.vue'
@@ -12,10 +12,10 @@ import Skills from '~/pages/Skills.vue'
 import SettingsPage from '~/pages/Settings.vue'
 import '@sourceant/design/tokens.css'
 
-// Hash history, because the agent serves one file and knows nothing about
-// paths a router invented.
+// Real paths, so a link somebody is handed can be opened and pasted like any
+// other URL. The agent answers anything that is not a file with the page.
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes: [
     { path: '/', component: Overview },
     { path: '/graph', component: Graph },

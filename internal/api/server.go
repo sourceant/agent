@@ -106,7 +106,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/reviews", s.listReviews)
 	mux.HandleFunc("GET /api/reviews/{id}", s.reviewed)
 	mux.HandleFunc("GET /api/browse", s.browse)
-	mux.Handle("GET /", ui.Handler())
+	mux.Handle("/mcp", s.mcp())
+	mux.Handle("/mcp/", s.mcp())
+	// Not method-scoped: Go refuses a "GET /" that is more general than a
+	// method-agnostic "/mcp/" registered beside it.
+	mux.Handle("/", ui.Handler())
 	return mux
 }
 
@@ -234,12 +238,12 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	write(w, http.StatusOK, done)
 }
 
+// knowledge is what is recorded, about one repository or about every one.
+//
+// Naming none is not a mistake here, unlike writing: a decision is remembered
+// by what it decided rather than by which checkout it was filed against.
 func (s *Server) knowledge(w http.ResponseWriter, r *http.Request) {
 	repository := r.URL.Query().Get("repository")
-	if repository == "" {
-		write(w, http.StatusBadRequest, problem{Error: "name a repository"})
-		return
-	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	page, err := s.reader.Knowledge(r.Context(), repository, limit, offset)

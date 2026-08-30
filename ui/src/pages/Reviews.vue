@@ -5,28 +5,42 @@ import {
   Card as UiCard,
   Chip,
   Diff,
+  DotIndicator,
   ItemCard,
   Markdown,
+  Empty,
+  Loading,
   Notice,
+  Origin,
   PageHead,
+  Section,
   Select,
+  Status,
   Tabs,
 } from '@sourceant/design'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Check,
+  ArrowLeft,
+  Boxes,
+  Bug,
+  CircleAlert,
+  CircleCheck,
+  MessageSquare,
   Clock,
   FileCode,
-  GitBranch,
+  FileText,
+  GitCommit,
+  Lightbulb,
   Loader2,
-  Plus,
   ShieldCheck,
+  Sparkles,
   TriangleAlert,
   Wand2,
 } from 'lucide-vue-next'
 import EmptyMachine from '~/components/EmptyMachine.vue'
-import { useRepositories } from '~/composables/useRepositories'
+import { useUp } from '~/composables/useUp'
+import { EVERY, useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
 
 /* Work read before anybody else has been asked to read it.
@@ -39,7 +53,10 @@ import { api } from '~/api'
 
 const route = useRoute()
 const router = useRouter()
-const { repositories, chosen, error, fetchRepositories } = useRepositories()
+const up = useUp()
+const { repositories, chosen, error, mixed, fetchRepositories } = useRepositories({
+  all: true,
+})
 const running = ref(false)
 const judging = ref(false)
 const result = ref(null)
@@ -121,31 +138,96 @@ const read = computed(() => result.value?.review ?? null)
 const summary = computed(() => read.value?.summary ?? null)
 const suggestions = computed(() => read.value?.suggestions ?? [])
 
-const VERDICTS = {
-  APPROVE: { label: 'Looks good', tone: 'success' },
-  REQUEST_CHANGES: { label: 'Change this first', tone: 'danger' },
-  COMMENT: { label: 'Worth a look', tone: 'warning' },
-}
-const verdict = computed(() => VERDICTS[read.value?.verdict] ?? null)
-
 // The rules this change does not meet. What it does meet is the ordinary case
 // and needs no announcement.
 const unmet = computed(() => verdicts.value.filter((one) => !one.passed))
 
-const tabs = computed(() => [
-  { id: 'overview', label: 'Overview' },
-  {
-    id: 'details',
-    label: `Files${files.value.length ? ` ${files.value.length}` : ''}`,
-  },
-])
+const commits = computed(() => result.value?.commits ?? [])
+
+// Whether the overview has anything to be a document about.
+const anything = computed(
+  () =>
+    Boolean(summary.value?.overview) ||
+    unmet.value.length > 0 ||
+    overall.value.length > 0 ||
+    suggestions.value.length > 0 ||
+    Object.keys(read.value?.notes ?? {}).length > 0,
+)
+
+const tabs = computed(() => {
+  const listing = [
+    { id: 'overview', label: 'Overview' },
+    {
+      id: 'details',
+      label: `Files${files.value.length ? ` ${files.value.length}` : ''}`,
+    },
+  ]
+  listing.push({
+    id: 'commits',
+    label: `Commits${commits.value.length ? ` ${commits.value.length}` : ''}`,
+  })
+  return listing
+})
+
+// What a reviewer said, in the words a reviewer says them in. "Nothing here
+// says this is not ready" is not a thing anybody says out loud.
+const VERDICTS = {
+  APPROVE: { label: 'Approved', tone: 'success' },
+  REQUEST_CHANGES: { label: 'Changes requested', tone: 'danger' },
+  COMMENT: { label: 'Commented', tone: 'warning' },
+}
+
+const verdict = computed(() => {
+  if (blocking.value.length) {
+    return {
+      label: 'Changes requested',
+      tone: 'danger',
+      count: blocking.value.length,
+    }
+  }
+  const said = read.value?.verdict
+  if (said && VERDICTS[said]) {
+    return { ...VERDICTS[said], count: suggestions.value.length || null }
+  }
+  if (!verdicts.value.length && !read.value) {
+    return { label: 'Not reviewed', tone: 'neutral', count: null }
+  }
+  return { label: 'Commented', tone: 'warning', count: advisory.value.length || null }
+})
+
+// The icon says the same thing as the verdict. A shield with a tick on it,
+// tinted with the review pillar's green, said "approved" on every review.
+const MARKS = {
+  success: CircleCheck,
+  danger: CircleAlert,
+  warning: MessageSquare,
+  neutral: ShieldCheck,
+}
+const mark = computed(() => (result.value ? MARKS[verdict.value.tone] : ShieldCheck))
+
+const CATEGORIES = {
+  BUG: 'danger',
+  SECURITY: 'danger',
+  PERFORMANCE: 'warning',
+  REFACTOR: 'info',
+  STYLE: 'neutral',
+  CLARITY: 'neutral',
+  TEST: 'info',
+  DOCUMENTATION: 'neutral',
+}
+
+const toneOf = (category) => CATEGORIES[String(category || '').toUpperCase()] ?? 'info'
 
 // A suggestion is about a line, so it is drawn against that line beside
 // whatever a skill said about the same place.
 const notesOn = (path) => [
   ...findings.value
     .filter((one) => one.path === path)
-    .map((one) => ({ ...one, from: one.skill })),
+    .map((one) => ({
+      ...one,
+      from: one.skill,
+      tone: one.severity === 'blocking' ? 'danger' : 'warning',
+    })),
   ...suggestions.value
     .filter((one) => one.path === path)
     .map((one) => ({
@@ -153,9 +235,20 @@ const notesOn = (path) => [
       severity: 'suggestion',
       detail: one.comment,
       code: one.suggested_code,
+      replacing: one.existing_code,
       from: one.category || 'review',
+      tone: toneOf(one.category),
     })),
 ]
+
+// Choosing one narrows the page to it. It does not start a review: asking for
+// work to be done is a click somebody makes deliberately, on the button that
+// says so, not a side effect of picking from a list.
+async function narrowTo(name) {
+  if (!name) return
+  chosen.value = name
+  await Promise.all([loadSkills(), loadPast()])
+}
 
 async function loadPast() {
   try {
@@ -248,6 +341,9 @@ async function collect(id, useModel = true) {
     error.value = answered.error
     return
   }
+  if (answered.repository && answered.repository !== chosen.value) {
+    chosen.value = answered.repository
+  }
   result.value = answered.review
   looking.value = ''
   tab.value = 'overview'
@@ -264,10 +360,17 @@ watch(chosen, () => {
   loadPast()
 })
 
-// A link somebody was handed opens the review it names.
+// A link somebody was handed opens the review it names. Going back to the
+// listing has to put the review away, or the URL changes and the page does
+// not, which reads as a back button that does nothing.
 watch(named, (id) => {
-  if (!id) return
   stopAsking()
+  if (!id) {
+    result.value = null
+    reading.value = null
+    loadPast()
+    return
+  }
   collect(id)
 })
 
@@ -284,24 +387,44 @@ onMounted(async () => {
   <div class="flex h-full min-h-0 flex-col">
     <PageHead
       pillar="review"
-      title="Reviews"
-      sub="Your work read here, before anybody else is asked to read it."
+      :title="where ? `${where.branch || 'no branch'} → ${where.against}` : 'Reviews'"
+      :sub="where ? where.path : 'Your work read here, before anybody else is asked to read it.'"
+      :mono="Boolean(where)"
+      :tone="result ? verdict.tone : undefined"
     >
-      <template #icon><ShieldCheck class="h-6 w-6" /></template>
+      <template v-if="named" #back>
+        <UiButton variant="ghost" size="icon" aria-label="Back to reviews" @click="up('/reviews')">
+          <ArrowLeft class="h-4 w-4" />
+        </UiButton>
+      </template>
+      <template #icon><component :is="mark" class="h-6 w-6" /></template>
+      <template v-if="result" #meta>
+        <Status :label="verdict.label" :tone="verdict.tone" :count="verdict.count" />
+        <span v-if="where">{{ where.commits }} commit{{ where.commits === 1 ? '' : 's' }} ahead</span>
+        <span>{{ files.length }} file{{ files.length === 1 ? '' : 's' }}</span>
+
+      </template>
       <template #actions>
         <Select v-if="repositories.length > 1" v-model="chosen" size="sm" aria-label="Repository">
+          <option :value="EVERY">All repositories</option>
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
           </option>
         </Select>
 
-        <UiButton v-if="repositories.length" size="sm" variant="outline" :disabled="running" @click="run(false)">
+        <UiButton
+          v-if="repositories.length && chosen"
+          size="sm"
+          variant="outline"
+          :disabled="running"
+          @click="run(false)"
+        >
           <Loader2 v-if="running" class="mr-2 h-4 w-4 animate-spin" />
           <FileCode v-else class="mr-2 h-4 w-4" />
           {{ running ? 'Reading…' : 'Read what changed' }}
         </UiButton>
         <UiButton
-          v-if="repositories.length && hasModel"
+          v-if="repositories.length && hasModel && chosen"
           size="sm"
           variant="glow"
           :disabled="judging"
@@ -311,6 +434,19 @@ onMounted(async () => {
           <Wand2 v-else class="mr-2 h-4 w-4" />
           {{ judging ? 'Reviewing…' : 'Review it' }}
         </UiButton>
+
+        <Select
+          v-else-if="repositories.length && hasModel"
+          :model-value="''"
+          size="sm"
+          aria-label="Choose a repository to review"
+          @update:model-value="narrowTo"
+        >
+          <option value="">Choose a repository…</option>
+          <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
+            {{ repository.name }}
+          </option>
+        </Select>
       </template>
     </PageHead>
 
@@ -319,46 +455,39 @@ onMounted(async () => {
     <EmptyMachine v-if="repositories.length === 0" />
 
     <template v-else>
-      <Notice v-if="!hasModel" tone="info" class="mb-4">
+      <Notice v-if="!hasModel && chosen" tone="info" class="mb-4">
         No model is configured, so nothing here can be judged. Reading what changed needs nothing.
         Choose a model in Settings to have the work read against your skills.
       </Notice>
 
       <template v-if="!result">
-        <UiCard
+        <Loading
           v-if="reading?.status === 'running'"
-          class="flex flex-1 flex-col items-center justify-center p-12 text-center"
-        >
-          <Loader2 class="mb-3 h-8 w-8 animate-spin text-muted-foreground" />
-          <p class="font-medium">Reading it.</p>
-          <p class="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            This keeps going whether or not anybody is watching, and the link to it keeps working.
-          </p>
-        </UiCard>
+          label="Reading it"
+          note="This keeps going whether or not anybody is watching, and the link to it keeps working."
+        />
 
         <template v-else>
-          <UiCard class="mb-3 p-8 text-center">
-            <ShieldCheck class="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-            <p class="font-medium">Read this checkout's work.</p>
-            <p class="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-              Everything comes off the checkout, so work you have not pushed, or not committed,
-              still gets a review.
-            </p>
-            <UiButton
-              v-if="repositories.length && hasModel"
-              class="mt-4"
-              variant="glow"
-              :disabled="judging"
-              @click="run(true)"
-            >
-              <Loader2 v-if="judging" class="mr-2 h-4 w-4 animate-spin" />
-              <Plus v-else class="mr-2 h-4 w-4" />
-              Review it
-            </UiButton>
-          </UiCard>
-
           <!-- Older ones, because a review has a name and somebody may have
                been handed one, or run one this morning. -->
+          <Empty v-if="!past.length" title="Nothing read here yet">
+            <template #icon><ShieldCheck class="h-8 w-8" /></template>
+            Everything comes off the checkout, so work you have not pushed, or not
+            committed, still gets a review.
+            <template v-if="!chosen" #actions>
+              <UiButton
+                v-for="repository in repositories"
+                :key="repository.name"
+                size="sm"
+                variant="outline"
+                @click="narrowTo(repository.name)"
+              >
+                <Boxes class="mr-2 h-4 w-4" />
+                {{ repository.name }}
+              </UiButton>
+            </template>
+          </Empty>
+
           <template v-if="past.length">
             <p class="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Earlier</p>
             <div class="space-y-2">
@@ -382,7 +511,10 @@ onMounted(async () => {
                 </template>
                 <template #meta>
                   <span>{{ when(one.started) }}</span>
-                  <span class="font-mono">{{ one.repository }}</span>
+                  <Origin v-if="mixed" :name="one.repository">
+                    <template #icon><Boxes class="h-3 w-3" /></template>
+                  </Origin>
+                  <span v-else class="font-mono">{{ one.repository }}</span>
                 </template>
               </ItemCard>
             </div>
@@ -391,162 +523,228 @@ onMounted(async () => {
       </template>
 
       <template v-else>
-        <Tabs v-model="tab" :tabs="tabs" label="What to look at" class="mb-3 w-fit" />
+        <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Tabs v-model="tab" :tabs="tabs" label="What to look at" class="w-fit" />
 
-    <!-- What it is read against. Whatever applied comes back here after a
-             review, so taking one off and running again is the obvious next move
-             rather than a form to fill in. -->
-        <UiCard v-if="repositories.length" class="mb-3 flex flex-wrap items-center gap-2 p-3">
-          <span class="text-xs uppercase tracking-wider text-muted-foreground">Read against</span>
+          <div class="ml-auto flex flex-wrap items-center gap-1.5">
+            <span class="text-xs uppercase tracking-wider text-muted-foreground">
+              Skills applied
+            </span>
+            <Chip
+              v-for="id in picked"
+              :key="id"
+              :label="nameOf(id)"
+              :tone="verdictFor(id) === undefined ? 'default' : verdictFor(id) ? 'success' : 'danger'"
+              removable
+              @remove="drop(id)"
+            >
+              {{ nameOf(id) }}
+            </Chip>
+            <Chip v-if="!picked.length" tone="muted">Whatever applies</Chip>
+            <Select
+              v-if="spare.length"
+              :model-value="adding"
+              size="sm"
+              aria-label="Add a skill"
+              @update:model-value="add"
+            >
+              <option value="">Add…</option>
+              <option v-for="skill in spare" :key="skill.id" :value="skill.id">
+                {{ skill.name }}
+              </option>
+            </Select>
+          </div>
+        </div>
 
-          <Chip
-            v-for="id in picked"
-            :key="id"
-            removable
-            :label="nameOf(id)"
-            :tone="verdictFor(id) === undefined ? 'default' : verdictFor(id) ? 'success' : 'danger'"
-            @remove="drop(id)"
-          >
-            {{ nameOf(id) }}
-          </Chip>
-
-          <Chip v-if="!picked.length" tone="muted">Whatever applies</Chip>
-
-          <Select
-            v-if="spare.length"
-            :model-value="adding"
-            size="sm"
-            class="ml-auto"
-            aria-label="Add a skill"
-            @update:model-value="add"
-          >
-            <option value="">Add a skill…</option>
-            <option v-for="skill in spare" :key="skill.id" :value="skill.id">{{ skill.name }}</option>
-          </Select>
-        </UiCard>
-
-        <!-- What is being reviewed, against what, and how it went. -->
-        <UiCard class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
-          <component
-            :is="result.ready ? Check : TriangleAlert"
-            class="h-5 w-5 shrink-0"
-            :class="result.ready ? 'text-success' : 'text-destructive'"
-          />
-          <p class="font-medium">
-            <template v-if="blocking.length">
-              {{ blocking.length }} thing{{ blocking.length === 1 ? '' : 's' }} to fix first
-            </template>
-            <template v-else-if="verdicts.length">Nothing here says this is not ready.</template>
-            <template v-else>{{ result.note || 'Read, not judged.' }}</template>
-          </p>
-
-          <span v-if="where" class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <GitBranch class="h-3.5 w-3.5" />
-            <span class="font-mono">{{ where.branch || 'no branch' }}</span>
-            <span aria-hidden="true">→</span>
-            <span class="font-mono">{{ where.against }}</span>
-            <UiBadge variant="outline">
-              {{ where.commits }} commit{{ where.commits === 1 ? '' : 's' }} ahead
-            </UiBadge>
-            <UiBadge variant="outline">
-              {{ files.length }} file{{ files.length === 1 ? '' : 's' }}
-            </UiBadge>
-            <UiBadge v-if="advisory.length" variant="secondary">
-              {{ advisory.length }} suggestion{{ advisory.length === 1 ? '' : 's' }}
-            </UiBadge>
-          </span>
-        </UiCard>
-
-        <!-- Only the ones it does not meet. A row of chips saying six rules
-             were satisfied is not news; the one that was not is. -->
-        <UiCard v-if="unmet.length" class="mb-3 border-destructive/40 p-4">
-          <p class="mb-2 text-sm font-medium">
-            {{ unmet.length }} thing{{ unmet.length === 1 ? '' : 's' }} this team has written
-            down that the change does not meet
-          </p>
-          <ul class="space-y-1.5 text-sm">
-            <li v-for="verdict in unmet" :key="verdict.skill" class="flex gap-2">
-              <TriangleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
-              <span class="min-w-0">
-                <span class="font-medium">{{ verdict.skill }}</span>
-                <span v-if="verdict.note" class="text-muted-foreground"> — {{ verdict.note }}</span>
-              </span>
-            </li>
-          </ul>
-        </UiCard>
-
-        <Notice
-          v-for="(one, index) in overall"
-          :key="index"
-          :tone="one.severity === 'blocking' ? 'danger' : 'warning'"
-          class="mb-3"
-        >
-          {{ one.detail }}
-          <span class="text-muted-foreground">— {{ one.skill }}</span>
-        </Notice>
+        <Notice v-if="result.note && !read" tone="info" class="mb-3">{{ result.note }}</Notice>
 
 
         <!-- The review, in the order somebody reads one. -->
-        <div v-if="tab === 'overview'" class="min-h-0 flex-1 space-y-3 overflow-y-auto">
-          <UiCard v-if="summary?.overview" class="p-5">
-            <div class="mb-2 flex flex-wrap items-center gap-2">
-              <h2 class="font-semibold">What this change does</h2>
-              <UiBadge v-if="verdict" :variant="verdict.tone === 'danger' ? 'destructive' : verdict.tone">
-                {{ verdict.label }}
-              </UiBadge>
+        <div v-if="tab === 'commits'" class="min-h-0 flex-1 overflow-y-auto">
+          <Empty v-if="!commits.length" title="Nothing committed on this branch" compact>
+            Everything here is uncommitted work, which is in the diff rather than
+            in a commit.
+          </Empty>
+
+          <UiCard v-else class="divide-y px-4 py-1">
+            <div v-for="commit in commits" :key="commit.sha" class="py-2.5">
+              <component
+                :is="commit.body ? 'details' : 'div'"
+                :class="commit.body && 'group'"
+              >
+                <component
+                  :is="commit.body ? 'summary' : 'div'"
+                  class="flex items-baseline gap-2 text-sm"
+                  :class="commit.body && 'cursor-pointer list-none'"
+                >
+                  <GitCommit class="h-3.5 w-3.5 shrink-0 self-center text-muted-foreground" />
+                  <span class="min-w-0 flex-1 truncate font-medium">{{ commit.subject }}</span>
+                  <span class="shrink-0 font-mono text-xs text-muted-foreground">
+                    {{ commit.sha.slice(0, 8) }}
+                  </span>
+                  <span class="shrink-0 text-xs text-muted-foreground">{{ commit.author }}</span>
+                  <span class="shrink-0 text-xs text-muted-foreground">{{ when(commit.at) }}</span>
+                </component>
+                <p
+                  v-if="commit.body"
+                  class="mt-2 whitespace-pre-wrap pl-5 text-sm text-muted-foreground"
+                >
+                  {{ commit.body }}
+                </p>
+              </component>
             </div>
+          </UiCard>
+        </div>
+
+        <div v-else-if="tab === 'overview'" class="min-h-0 flex-1 overflow-y-auto">
+          <Empty v-if="!anything" title="Read, not judged" compact>
+            {{ result.note || 'Ask for a review to have it read properly.' }}
+          </Empty>
+
+          <UiCard v-else class="divide-y px-5 py-1">
+          <Section v-if="summary?.overview" title="What this change does" tone="info">
+            <template #icon><FileText class="h-4 w-4" /></template>
             <Markdown :source="summary.overview" />
-          </UiCard>
+          </Section>
 
-          <UiCard v-if="summary?.critical_issues?.length" class="border-destructive/40 p-5">
-            <h2 class="mb-2 font-semibold">Worth stopping for</h2>
-            <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li v-for="(one, index) in summary.critical_issues" :key="index">{{ one }}</li>
+          <!-- One line each. A skill that has a page to say about a commit
+               message says it to whoever opens it, not to everybody. -->
+          <Section
+            v-if="unmet.length || overall.length"
+            title="Against what this team wrote down"
+            tone="warning"
+            :count="unmet.length + overall.length"
+            collapsible
+            closed
+          >
+            <template #icon><TriangleAlert class="h-4 w-4" /></template>
+            <ul class="divide-y">
+              <li v-for="verdict in unmet" :key="verdict.skill" class="py-2 first:pt-0">
+                <details>
+                  <summary class="flex cursor-pointer items-center gap-2 text-sm">
+                    <DotIndicator tone="danger" :title="`${verdict.skill} is not met`" />
+                    <span class="font-medium">{{ verdict.skill }}</span>
+                    <span class="min-w-0 flex-1 truncate text-muted-foreground">
+                      {{ (verdict.note || '').split('\n')[0] }}
+                    </span>
+                  </summary>
+                  <Markdown
+                    v-if="verdict.note"
+                    :source="verdict.note"
+                    class="mt-2 pl-5 text-sm text-muted-foreground"
+                  />
+                </details>
+              </li>
+              <li v-for="(one, index) in overall" :key="`o${index}`" class="py-2 first:pt-0">
+                <details>
+                  <summary class="flex cursor-pointer items-center gap-2 text-sm">
+                    <DotIndicator
+                      :tone="one.severity === 'blocking' ? 'danger' : 'warning'"
+                      :title="one.skill || 'A skill'"
+                    />
+                    <span class="font-medium">{{ one.skill }}</span>
+                    <span class="min-w-0 flex-1 truncate text-muted-foreground">
+                      {{ (one.detail || '').split('\n')[0] }}
+                    </span>
+                  </summary>
+                  <Markdown
+                    :source="one.detail"
+                    class="mt-2 pl-5 text-sm text-muted-foreground"
+                  />
+                </details>
+              </li>
             </ul>
-          </UiCard>
+          </Section>
 
-          <UiCard v-if="summary?.key_improvements?.length" class="p-5">
-            <h2 class="mb-2 font-semibold">Worth changing</h2>
-            <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li v-for="(one, index) in summary.key_improvements" :key="index">{{ one }}</li>
+          <Section
+            v-if="summary?.critical_issues?.length"
+            title="Worth stopping for"
+            tone="danger"
+            :count="summary.critical_issues.length"
+            collapsible
+          >
+            <template #icon><CircleAlert class="h-4 w-4" /></template>
+            <ul class="space-y-2">
+              <li v-for="(one, index) in summary.critical_issues" :key="index">
+                <Markdown :source="one" />
+              </li>
             </ul>
-          </UiCard>
+          </Section>
 
-          <UiCard v-if="summary?.minor_suggestions?.length" class="p-5">
-            <h2 class="mb-2 font-semibold">Nice to have</h2>
-            <ul class="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li v-for="(one, index) in summary.minor_suggestions" :key="index">{{ one }}</li>
+          <Section
+            v-if="summary?.key_improvements?.length"
+            title="Worth changing"
+            tone="warning"
+            :count="summary.key_improvements.length"
+            collapsible
+          >
+            <template #icon><Lightbulb class="h-4 w-4" /></template>
+            <ul class="space-y-2">
+              <li v-for="(one, index) in summary.key_improvements" :key="index">
+                <Markdown :source="one" />
+              </li>
             </ul>
-          </UiCard>
+          </Section>
 
-          <UiCard v-if="suggestions.length" class="p-5">
-            <h2 class="mb-1 font-semibold">
-              {{ suggestions.length }} suggestion{{ suggestions.length === 1 ? '' : 's' }}
-            </h2>
+          <Section
+            v-if="summary?.minor_suggestions?.length"
+            title="Nice to have"
+            :count="summary.minor_suggestions.length"
+            collapsible
+            closed
+          >
+            <template #icon><Sparkles class="h-4 w-4" /></template>
+            <ul class="space-y-2">
+              <li v-for="(one, index) in summary.minor_suggestions" :key="index">
+                <Markdown :source="one" />
+              </li>
+            </ul>
+          </Section>
+
+          <Section
+            v-if="suggestions.length"
+            title="Suggestions"
+            tone="info"
+            :count="suggestions.length"
+            collapsible
+          >
+            <template #icon><Bug class="h-4 w-4" /></template>
             <p class="mb-3 text-sm text-muted-foreground">
               Each one is drawn against the line it is about, under Files.
             </p>
             <ul class="space-y-1.5 text-sm">
-              <li v-for="(one, index) in suggestions" :key="index">
+              <li v-for="(one, index) in suggestions" :key="index" class="flex gap-2">
+                <DotIndicator
+                  v-if="one.category"
+                  :tone="toneOf(one.category)"
+                  :title="one.category"
+                  :label="one.category.toLowerCase()"
+                  class="mt-0.5 shrink-0"
+                />
                 <button
                   type="button"
-                  class="text-left hover:underline"
+                  class="min-w-0 text-left hover:underline"
                   @click="looking = one.path; tab = 'details'"
                 >
                   <span class="font-mono text-xs">{{ one.path }}:{{ one.start_line }}</span>
-                  <span class="ml-2 text-muted-foreground">{{ one.comment }}</span>
+                  <Markdown :source="one.comment" class="text-muted-foreground" />
                 </button>
               </li>
             </ul>
-          </UiCard>
+          </Section>
 
-          <UiCard v-for="(text, name) in read?.notes ?? {}" :key="name" class="p-5">
-            <h2 class="mb-2 font-semibold capitalize">{{ name.replace(/_/g, ' ') }}</h2>
-            <Markdown :source="text" />
-          </UiCard>
+          <Section
+            v-for="(text, name) in read?.notes ?? {}"
+            :key="name"
+            :title="String(name).replace(/_/g, ' ')"
+            collapsible
+            closed
+            class="capitalize"
+          >
+            <template #icon><FileText class="h-4 w-4" /></template>
+            <Markdown :source="text" class="normal-case" />
+          </Section>
 
-          <UiCard v-if="!summary?.overview" class="p-8 text-center text-sm text-muted-foreground">
-            {{ result.note || 'Read, not judged. Ask for a review to have it read properly.' }}
           </UiCard>
         </div>
 

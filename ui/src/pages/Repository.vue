@@ -24,6 +24,7 @@ import {
   Trash2,
 } from 'lucide-vue-next'
 import GraphWorkbench from '~/components/GraphWorkbench.vue'
+import { useUp } from '~/composables/useUp'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
 
@@ -36,6 +37,7 @@ import { api } from '~/api'
 
 const route = useRoute()
 const router = useRouter()
+const up = useUp()
 const { repositories, chosen, fetchRepositories } = useRepositories()
 
 const name = computed(() => String(route.params.name ?? ''))
@@ -126,7 +128,7 @@ onMounted(async () => {
   <div class="flex h-full min-h-0 flex-col">
     <PageHead :title="name" :sub="repository?.path" mono>
       <template #back>
-        <UiButton variant="ghost" size="icon" aria-label="Back to repositories" @click="router.push('/repositories')">
+        <UiButton variant="ghost" size="icon" aria-label="Back to repositories" @click="up('/repositories')">
           <ArrowLeft class="h-4 w-4" />
         </UiButton>
       </template>

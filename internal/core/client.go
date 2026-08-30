@@ -252,9 +252,12 @@ func (c *Client) Index(ctx context.Context, repository string, everything, updat
 
 // Knowledge is one thing recorded about a repository.
 type Knowledge struct {
-	ID         string         `json:"id"`
-	Kind       string         `json:"kind"`
-	Status     string         `json:"status"`
+	ID     string `json:"id"`
+	Kind   string `json:"kind"`
+	Status string `json:"status"`
+	// Which repository it was recorded against. Only answered when the search
+	// was not narrowed to one, where it is the thing a reader cannot infer.
+	Repository string         `json:"repository,omitempty"`
 	Summary    string         `json:"summary"`
 	Properties map[string]any `json:"properties"`
 }
@@ -449,12 +452,15 @@ type Where struct {
 
 // Suggestion is one thing to change, and the code to put there.
 type Suggestion struct {
-	Path          string `json:"path"`
-	StartLine     int    `json:"start_line"`
-	EndLine       int    `json:"end_line"`
-	Side          string `json:"side"`
-	Comment       string `json:"comment"`
-	Category      string `json:"category"`
+	Path      string `json:"path"`
+	StartLine int    `json:"start_line"`
+	EndLine   int    `json:"end_line"`
+	Side      string `json:"side"`
+	Comment   string `json:"comment"`
+	Category  string `json:"category"`
+	// Both sides. Without what it replaces, a suggestion draws as an addition
+	// out of nowhere.
+	ExistingCode  string `json:"existing_code"`
 	SuggestedCode string `json:"suggested_code"`
 }
 
@@ -475,13 +481,26 @@ type Read struct {
 	Notes       map[string]string `json:"notes"`
 }
 
+// Commit is one commit the branch has that the branch it left does not.
+type Commit struct {
+	SHA     string `json:"sha"`
+	Author  string `json:"author"`
+	At      string `json:"at"`
+	Subject string `json:"subject"`
+	Body    string `json:"body"`
+}
+
 // Review is whether a checkout's work is ready to be proposed to anyone.
+//
+// Every field the core answers with has to be named here. This is decoded into
+// and re-encoded on the way out, so anything missing is dropped in silence.
 type Review struct {
 	Ready     bool          `json:"ready"`
 	Note      string        `json:"note"`
 	Base      string        `json:"base"`
 	Where     Where         `json:"where"`
 	Changed   []ChangedFile `json:"changed"`
+	Commits   []Commit      `json:"commits"`
 	Skills    []Skill       `json:"skills"`
 	Knowledge []Recorded    `json:"knowledge"`
 	Verdicts  []Verdict     `json:"verdicts"`

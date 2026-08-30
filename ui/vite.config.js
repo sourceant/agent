@@ -6,7 +6,9 @@ import vue from '@vitejs/plugin-vue'
 // the sources it was built from cannot disagree.
 export default defineConfig({
   plugins: [vue()],
-  base: './',
+  // Absolute, not relative: routes are real paths now, so a page served at
+  // /reviews/abc123 would otherwise resolve ./assets against /reviews/.
+  base: '/',
   resolve: {
     alias: { '~': fileURLToPath(new URL('./src', import.meta.url)) },
     // The design package is linked from a sibling checkout, so its own imports

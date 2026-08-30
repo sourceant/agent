@@ -66,3 +66,27 @@ func TestABrowserIsNotToldToKeepAViewTheNextAgentReplaces(t *testing.T) {
 		t.Errorf("got Cache-Control %q, want no-store", got)
 	}
 }
+
+// A link somebody was handed by an agent is a real path, not a fragment. The
+// browser asks this server for it directly, so anything that is not a file has
+// to answer with the page rather than 404.
+func TestAPathThePageOwnsAnswersWithThePage(t *testing.T) {
+	for _, path := range []string{"/reviews/abc123", "/settings", "/repositories"} {
+		answered := fetch(t, path)
+		if answered.Code != http.StatusOK {
+			t.Fatalf("got %d for %s, want 200", answered.Code, path)
+		}
+		if !strings.Contains(answered.Body.String(), "id=\"app\"") {
+			t.Fatalf("%s did not answer with the page", path)
+		}
+	}
+}
+
+// A missing asset still 404s. Answering with the page would hand a broken
+// script tag an HTML document and fail somewhere less obvious.
+func TestAMissingAssetIsStillMissing(t *testing.T) {
+	answered := fetch(t, "/assets/nothing-here.js")
+	if answered.Code != http.StatusNotFound {
+		t.Fatalf("got %d for a missing asset, want 404", answered.Code)
+	}
+}

@@ -83,7 +83,7 @@ onMounted(async () => {
             </span>
           </template>
           <template #actions>
-            <UiButton as="a" href="#/graph" variant="ghost" size="sm">Graph</UiButton>
+            <UiButton as="a" href="/graph" variant="ghost" size="sm">Graph</UiButton>
           </template>
         </ItemCard>
       </div>

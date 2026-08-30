@@ -1,5 +1,6 @@
 <script setup>
 import {
+  Empty,
   Button as UiButton,
   Card as UiCard,
   ItemCard,
@@ -88,16 +89,15 @@ onMounted(refresh)
       {{ error }}
     </Notice>
 
-    <UiCard v-if="repositories.length === 0" class="text-center py-16 px-6">
-      <h2 class="text-lg font-semibold mb-1">No folders yet</h2>
-      <p class="text-muted-foreground text-sm mb-4">
-        Point SourceAnt at a repository and it reads the files into a graph.
-      </p>
-      <UiButton variant="glow" @click="picking = true">
-        <Plus class="mr-2 h-4 w-4" />
-        Add a folder
-      </UiButton>
-    </UiCard>
+    <Empty v-if="repositories.length === 0" title="No folders yet">
+      Point SourceAnt at a repository and it reads the files into a graph.
+      <template #actions>
+        <UiButton variant="glow" @click="picking = true">
+          <Plus class="mr-2 h-4 w-4" />
+          Add a folder
+        </UiButton>
+      </template>
+    </Empty>
 
     <div v-else class="grid gap-3">
       <ItemCard

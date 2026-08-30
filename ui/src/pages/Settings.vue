@@ -9,6 +9,7 @@ import {
 } from '@sourceant/design'
 import { computed, onMounted, ref } from 'vue'
 import { Settings as SettingsIcon, Sun, Moon } from 'lucide-vue-next'
+import McpPanel from '~/components/McpPanel.vue'
 import SettingsPanel from '~/components/SettingsPanel.vue'
 import { useTheme } from '~/composables/useTheme'
 import { api } from '~/api'
@@ -21,6 +22,7 @@ import { api } from '~/api'
  * change in this file. */
 
 const OVERVIEW = 'overview'
+const MCP = 'mcp'
 
 const { isDark, toggleTheme } = useTheme()
 const status = ref(null)
@@ -32,6 +34,7 @@ const tab = ref(OVERVIEW)
 const tabs = computed(() => [
   { id: OVERVIEW, label: 'Overview' },
   ...groups.value.map((name) => ({ id: name, label: name })),
+  { id: MCP, label: 'MCP' },
 ])
 
 const model = computed(() => {
@@ -128,6 +131,8 @@ onMounted(async () => {
         </UiButton>
       </UiCard>
     </template>
+
+    <McpPanel v-else-if="tab === MCP" />
 
     <UiCard v-else class="p-5">
       <h2 class="mb-1 font-semibold">{{ tab }}</h2>
