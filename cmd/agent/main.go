@@ -71,11 +71,29 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	supervised := make(chan error, 1)
-	go func() { supervised <- supervisor.Run(ctx) }()
+	supervised := make(chan struct{})
+	var coreErr error
+	go func() {
+		defer close(supervised)
+		coreErr = supervisor.Run(ctx)
+		cleanup, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		if err := installed.Stop(cleanup, port); err != nil && coreErr == nil {
+			coreErr = err
+		}
+	}()
 
 	served := make(chan error, 1)
 	server := api.New(client, supervisor, Version, coreURL)
+	server.SetStop(func(request context.Context) error {
+		stop()
+		select {
+		case <-supervised:
+			return coreErr
+		case <-request.Done():
+			return request.Err()
+		}
+	})
 	go func() { served <- server.Serve(ctx, cfg.Listen) }()
 
 	// A repository read once answers about last month, so it is read again on
@@ -89,10 +107,20 @@ func run() error {
 	// Whichever half stops first ends the agent: an agent serving without a
 	// core answers nothing, and a core nobody serves is not reachable.
 	select {
-	case err := <-supervised:
-		return err
+	case <-supervised:
+		stop()
+		serverErr := <-served
+		if coreErr != nil {
+			return coreErr
+		}
+		return serverErr
 	case err := <-served:
-		return err
+		stop()
+		<-supervised
+		if err != nil {
+			return err
+		}
+		return coreErr
 	}
 }
 

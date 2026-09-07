@@ -9,6 +9,7 @@ export function useCodeGraph() {
 
   async function fetchCodeGraph(owner, repo, ask = {}) {
     loading.value = true
+    problem.value = null
     try {
       graph.value = await api.graph(`${owner}/${repo}`, ask)
       problem.value = null

@@ -7,13 +7,16 @@
 package runtime
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // Kind is how the core is installed.
@@ -208,4 +211,25 @@ func throughTheHost(address string) string {
 		parsed.Host = "host.docker.internal"
 	}
 	return parsed.String()
+}
+
+func (c Core) Stop(ctx context.Context, port int) error {
+	if c.Runtime != Docker {
+		return nil
+	}
+	name := "sourceant-core-" + strconv.Itoa(port)
+	output, err := exec.CommandContext(ctx, "docker", "container", "ls", "--all", "--format", "{{.Names}}").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("checking the core container: %w: %s", err, output)
+	}
+	for _, container := range strings.Fields(string(output)) {
+		if container == name {
+			output, err = exec.CommandContext(ctx, "docker", "container", "stop", "--timeout", "5", name).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("stopping the core container: %w: %s", err, output)
+			}
+			break
+		}
+	}
+	return nil
 }
