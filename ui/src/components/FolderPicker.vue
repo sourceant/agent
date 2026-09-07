@@ -45,8 +45,8 @@ async function add() {
   busy.value = true
   problem.value = ''
   try {
-    await api.addRepository(listing.value.path, name.value.trim())
-    await api.index('', { everything: true })
+    const repository = await api.addRepository(listing.value.path, name.value.trim())
+    await api.index(repository.name)
     emit('added')
     emit('close')
   } catch (error) {
@@ -96,6 +96,9 @@ async function add() {
     <Notice v-if="problem" tone="danger" class="mt-3">
       {{ problem }}
     </Notice>
+    <p v-if="busy" role="status" class="mt-3 text-sm text-muted-foreground">
+      Reading this repository. Large repositories can take several minutes.
+    </p>
 
     <div class="flex items-center gap-2 pt-5">
       <UiButton :disabled="busy || !listing" @click="add">

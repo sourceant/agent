@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -69,6 +70,7 @@ type Server struct {
 	supervisor Supervision
 	version    string
 	coreURL    string
+	stop       func(context.Context) error
 }
 
 // New builds the agent's HTTP surface.
@@ -81,9 +83,29 @@ func New(reader Reader, supervisor Supervision, version, coreURL string) *Server
 	}
 }
 
+func (s *Server) SetStop(stop func(context.Context) error) { s.stop = stop }
+
+func (s *Server) stopStack(w http.ResponseWriter, r *http.Request) {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !net.ParseIP(host).IsLoopback() || r.Header.Get("Origin") != "" || r.Header.Get("X-Sourceant-Client") != "cli" {
+		write(w, http.StatusForbidden, problem{Error: "stop is only available to the local CLI"})
+		return
+	}
+	if s.stop == nil {
+		write(w, http.StatusNotImplemented, problem{Error: "this agent does not support stopping"})
+		return
+	}
+	if err := s.stop(r.Context()); err != nil {
+		write(w, http.StatusInternalServerError, problem{Error: err.Error()})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // Handler is the agent's routes.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/stop", s.stopStack)
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("GET /api/repositories", s.repositories)
 	mux.HandleFunc("POST /api/repositories", s.addRepository)
@@ -466,14 +488,19 @@ func (s *Server) Serve(ctx context.Context, address string) error {
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
 		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 		defer cancel()
-		_ = server.Shutdown(shutdown)
+		if err := server.Shutdown(shutdown); err != nil {
+			_ = server.Close()
+		}
 	}()
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	<-shutdownDone
 	return nil
 }

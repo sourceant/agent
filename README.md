@@ -47,3 +47,9 @@ make build
 ## Licence
 
 MIT.
+
+## Versioning
+
+The agent is versioned independently of the CLI, core, and design package. Its release number does not select the core version. Setup records the core image or Python executable that the agent starts.
+
+Agent `1.0.0-beta.3` uses core `1.0.0-beta.2` as its compatibility baseline. Older cores are outside this release's supported baseline. No maximum core version is declared; this does not promise compatibility with future beta releases. Startup checks core health but does not enforce a version range. Select a known core release with `sourceant setup --core-version 1.0.0-beta.2`.

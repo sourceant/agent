@@ -40,7 +40,8 @@ onMounted(async () => {
   }
   if (asked) return
   await fetchRepositories()
-  open.value = repositories.value.length === 0
+  step.value = repositories.value.length ? 'model' : 'folder'
+  open.value = true
 })
 </script>
 
@@ -67,17 +68,14 @@ onMounted(async () => {
     </template>
 
     <template v-else>
-      <h2 class="text-lg font-semibold mb-1">Bring a model, or don't</h2>
+      <h2 class="text-lg font-semibold mb-1">Add a model and API key</h2>
       <p class="text-sm text-muted-foreground mb-5">
         Reading your code and reading what it already states about itself need no model at
         all. Proposing what nobody wrote down does. Your key stays on this machine and goes
         to that provider and nowhere else.
       </p>
-      <SettingsPanel group="Model" @saved="remember">
-        <template #after>
-          <UiButton variant="ghost" @click="remember">Not now</UiButton>
-        </template>
-      </SettingsPanel>
+      <SettingsPanel group="Model" @saved="remember" />
+      <UiButton variant="ghost" class="mt-4" @click="remember">Skip for now</UiButton>
     </template>
   </UiModal>
 </template>

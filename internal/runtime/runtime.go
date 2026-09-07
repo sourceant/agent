@@ -7,13 +7,17 @@
 package runtime
 
 import (
+	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // Kind is how the core is installed.
@@ -32,7 +36,8 @@ const DefaultImage = "ghcr.io/sourceant/sourceant:latest"
 
 // Core is everything needed to start the indexer.
 type Core struct {
-	Runtime Kind `json:"runtime"`
+	containerName string
+	Runtime       Kind `json:"runtime"`
 	// Command is the executable, for the python runtime.
 	Command string `json:"command,omitempty"`
 	// Image is the container, for the docker runtime.
@@ -119,7 +124,7 @@ func Save(path string, config Config) error {
 // this machine binds loopback and is reached there. A container binding
 // loopback would bind the container's own, reachable by nothing, so it binds
 // every interface inside and is published to loopback outside.
-func (c Core) Serve(port int) (string, []string, error) {
+func (c *Core) Serve(port int) (string, []string, error) {
 	number := strconv.Itoa(port)
 	switch c.Runtime {
 	case Python:
@@ -128,13 +133,14 @@ func (c Core) Serve(port int) (string, []string, error) {
 		}
 		return c.Command, []string{"serve", "--host", "127.0.0.1", "--port", number}, nil
 	case Docker:
+		c.containerName = "sourceant-core-" + rand.Text()
 		image := c.Image
 		if image == "" {
 			image = DefaultImage
 		}
 		args := []string{
 			"run", "--rm",
-			"--name", "sourceant-core-" + number,
+			"--name", c.containerName,
 			"-p", "127.0.0.1:" + number + ":" + number,
 		}
 		if c.DataDir != "" {
@@ -208,4 +214,25 @@ func throughTheHost(address string) string {
 		parsed.Host = "host.docker.internal"
 	}
 	return parsed.String()
+}
+
+func (c Core) Stop(ctx context.Context) error {
+	if c.Runtime != Docker || c.containerName == "" {
+		return nil
+	}
+	name := c.containerName
+	output, err := exec.CommandContext(ctx, "docker", "container", "ls", "--all", "--format", "{{.Names}}").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("checking the core container: %w: %s", err, output)
+	}
+	for _, container := range strings.Fields(string(output)) {
+		if container == name {
+			output, err = exec.CommandContext(ctx, "docker", "container", "stop", "--timeout", "5", name).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("stopping the core container: %w: %s", err, output)
+			}
+			break
+		}
+	}
+	return nil
 }

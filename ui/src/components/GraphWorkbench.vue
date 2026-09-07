@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CodeGraph as KnowledgeGraph, Tabs, useContextKinds } from '@sourceant/design'
+import { Button, CodeGraph as KnowledgeGraph, Loading, Tabs, useContextKinds } from '@sourceant/design'
 import { computed, ref, watch } from 'vue'
 import { Crosshair, Network, Search, X } from 'lucide-vue-next'
 import type { KnowledgeGraphData } from '~/types'
@@ -76,6 +76,9 @@ const focusLabel = computed(() => {
 })
 
 const parts = computed(() => drawn.value?.communities ?? [])
+const partsShown = ref(50)
+const visibleParts = computed(() => parts.value.slice(0, partsShown.value))
+watch(parts, () => { partsShown.value = 50 })
 
 const modes: { id: Mode, label: string }[] = [
   { id: '2d', label: '2D' },
@@ -234,7 +237,7 @@ defineExpose({ reload: loadGraph })
       <div v-if="offers('parts') && source === 'code' && parts.length">
         <p class="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Parts</p>
         <ul class="space-y-0.5">
-          <li v-for="p in parts" :key="p.id">
+          <li v-for="p in visibleParts" :key="p.id">
             <button
               type="button"
               class="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left text-[11px] transition-colors hover:bg-muted"
@@ -247,6 +250,13 @@ defineExpose({ reload: loadGraph })
             </button>
           </li>
         </ul>
+        <Button
+          v-if="partsShown < parts.length"
+          variant="ghost"
+          size="sm"
+          class="mt-2 w-full"
+          @click="partsShown += 50"
+        >Show more parts ({{ partsShown }} of {{ parts.length }})</Button>
         <p class="mt-1.5 text-[11px] text-muted-foreground">
           Grouped by what calls what. Click one to hide it.
         </p>
@@ -320,10 +330,18 @@ defineExpose({ reload: loadGraph })
       <div class="grid gap-4" :class="$slots.inspector ? 'lg:grid-cols-[1fr_20rem]' : ''">
         <div class="min-w-0">
           <div class="overflow-hidden rounded-lg border bg-card">
-            <UiLoadFailure v-if="problem" what="this graph" :message="problem" @retry="loadGraph" />
+            <div v-if="busy" class="flex" :style="{ height }">
+              <Loading
+                :label="source === 'code' ? 'Reading the code' : 'Reading the knowledge graph'"
+                note="Large repositories can take longer to load."
+                size="sm"
+              />
+            </div>
 
-            <div v-else-if="busy" :style="{ height }">
-              <UiLoadingState :label="source === 'code' ? 'Reading the code' : 'Reading the knowledge graph'" compact />
+            <div v-else-if="problem" role="alert" class="flex flex-col items-center justify-center gap-3 px-6 text-center" :style="{ height }">
+              <p class="text-sm font-medium">Could not load this graph</p>
+              <p class="text-xs text-muted-foreground">{{ problem.message }}</p>
+              <Button variant="outline" size="sm" @click="loadGraph">Try again</Button>
             </div>
 
             <div v-else-if="!hasRealGraph" class="flex flex-col items-center justify-center gap-3 px-6 text-center" :style="{ height }">
@@ -354,8 +372,11 @@ defineExpose({ reload: loadGraph })
             More than fits in one drawing, so this is the most connected part of it.
             Narrow it{{ railed ? ' on the left' : '' }}, or click something to walk out from it.
           </p>
-          <p v-else-if="hasRealGraph" class="mt-2 text-xs text-muted-foreground">
+          <p v-if="hasRealGraph" class="mt-2 text-xs text-muted-foreground">
             {{ drawn?.nodes.length }} symbols, {{ drawn?.links.length }} connections.
+          </p>
+          <p v-if="hasRealGraph && !drawn?.links.length" class="mt-2 text-xs text-muted-foreground">
+            No connections were found between these files.
           </p>
         </div>
 

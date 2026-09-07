@@ -133,3 +133,21 @@ func TestADataDirNobodyChoseIsNotMounted(t *testing.T) {
 		t.Errorf("mounted something without being told where: %v", args)
 	}
 }
+
+func TestDockerLaunchesOnTheSamePortHaveDifferentOwners(t *testing.T) {
+	first := Core{Runtime: Docker}
+	second := Core{Runtime: Docker}
+	_, firstArgs, err := first.Serve(8931)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, secondArgs, err := second.Serve(8931)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstName := firstArgs[slices.Index(firstArgs, "--name")+1]
+	secondName := secondArgs[slices.Index(secondArgs, "--name")+1]
+	if firstName == secondName || firstName != first.containerName || secondName != second.containerName {
+		t.Fatalf("container ownership overlaps: %q and %q", firstName, secondName)
+	}
+}
