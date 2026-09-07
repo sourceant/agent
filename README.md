@@ -47,3 +47,7 @@ make build
 ## Licence
 
 MIT.
+
+## Versioning
+
+The agent is versioned independently of the CLI, core, and design package. Its release number does not select the core version. Setup records the core image or Python executable that the agent starts.

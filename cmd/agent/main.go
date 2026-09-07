@@ -78,7 +78,7 @@ func run() error {
 		coreErr = supervisor.Run(ctx)
 		cleanup, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
-		if err := installed.Stop(cleanup, port); err != nil && coreErr == nil {
+		if err := installed.Stop(cleanup); err != nil && coreErr == nil {
 			coreErr = err
 		}
 	}()
