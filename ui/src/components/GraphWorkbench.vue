@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button, CodeGraph as KnowledgeGraph, Loading, LoadFailure, Tabs, useContextKinds } from '@sourceant/design'
+import { Button, CodeGraph as KnowledgeGraph, Loading, Tabs, useContextKinds } from '@sourceant/design'
 import { computed, ref, watch } from 'vue'
 import { Crosshair, Network, Search, X } from 'lucide-vue-next'
 import type { KnowledgeGraphData } from '~/types'
@@ -330,7 +330,7 @@ defineExpose({ reload: loadGraph })
       <div class="grid gap-4" :class="$slots.inspector ? 'lg:grid-cols-[1fr_20rem]' : ''">
         <div class="min-w-0">
           <div class="overflow-hidden rounded-lg border bg-card">
-            <div v-if="busy" :style="{ height }">
+            <div v-if="busy" class="flex" :style="{ height }">
               <Loading
                 :label="source === 'code' ? 'Reading the code' : 'Reading the knowledge graph'"
                 note="Large repositories can take longer to load."
@@ -338,7 +338,11 @@ defineExpose({ reload: loadGraph })
               />
             </div>
 
-            <LoadFailure v-else-if="problem" what="this graph" :message="problem.message" @retry="loadGraph" />
+            <div v-else-if="problem" role="alert" class="flex flex-col items-center justify-center gap-3 px-6 text-center" :style="{ height }">
+              <p class="text-sm font-medium">Could not load this graph</p>
+              <p class="text-xs text-muted-foreground">{{ problem.message }}</p>
+              <Button variant="outline" size="sm" @click="loadGraph">Try again</Button>
+            </div>
 
             <div v-else-if="!hasRealGraph" class="flex flex-col items-center justify-center gap-3 px-6 text-center" :style="{ height }">
               <Network class="h-7 w-7 text-muted-foreground" />
