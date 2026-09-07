@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-beta.3]
+
+### Added
+
+- Local stack shutdown waits for core cleanup and only stops this agent's container.
+- Graph loading and failure states explain the wait and allow retrying.
+- Model setup offers an optional skip, including when settings cannot load.
+
+### Fixed
+
+- Large graphs display their group controls in batches.
+- Adding a folder indexes only that repository.
+
+### Compatibility
+
+- Core `1.0.0-beta.2` is the compatibility baseline for this release.
+- Newer core beta releases require compatibility checks before being added to the supported set.
+
 ## [1.0.0-beta.2] - 2026-08-30
 
 First release, versioned alongside the core it supervises.
