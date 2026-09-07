@@ -22,8 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Compatibility
 
-- Core `1.0.0-beta.2` is the compatibility baseline for this release.
-- Newer core beta releases require compatibility checks before being added to the supported set.
+- Core compatibility: `1.0.0-beta.2`.
 
 ## [1.0.0-beta.2] - 2026-08-30
 
