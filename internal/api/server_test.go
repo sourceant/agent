@@ -236,7 +236,7 @@ func TestGraphPassesOnWhatNarrowsADrawing(t *testing.T) {
 	reader := &stubReader{}
 	server := New(reader, stubSupervisor{}, "dev", "")
 
-	call(t, server, "/api/graph?repository=acme/billing&path_prefix=app/&include_tests=true&node_limit=200&q=charge")
+	call(t, server, "/api/graph?repository=acme/billing&path_prefix=app/&include_tests=true&node_limit=200&focus=file%3Aapp%2Fcharge.py&depth=3&q=charge")
 
 	if reader.askedFor != "acme/billing" {
 		t.Errorf("asked for %q, want acme/billing", reader.askedFor)
@@ -245,6 +245,8 @@ func TestGraphPassesOnWhatNarrowsADrawing(t *testing.T) {
 		PathPrefix:   "app/",
 		IncludeTests: true,
 		NodeLimit:    200,
+		Focus:        "file:app/charge.py",
+		Depth:        3,
 		Query:        "charge",
 	}
 	if reader.askedOptions != want {

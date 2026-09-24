@@ -18,6 +18,8 @@ A checkout is reviewed here, by the same reviewer a pull request goes through. I
 
 `/mcp` is proxied through to the core, so a coding agent on this machine reaches the same index and can ask for the same review.
 
+The Graphs page also shows directory components and the source evidence for their dependencies. Export a JSON snapshot, or keep a baseline for comparison during the session. These readings use the current index and make no model calls. Incomplete snapshots cannot establish additions or removals. The same operations are available through `/api/architecture` and `/api/architecture/compare` for the CLI.
+
 Loopback is the default because the agent reads a working tree. The machine it runs on is the only audience it has.
 
 ## Running it

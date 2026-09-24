@@ -117,6 +117,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/repositories", s.dropRepository)
 	mux.HandleFunc("POST /api/index", s.index)
 	mux.HandleFunc("GET /api/graph", s.graph)
+	mux.HandleFunc("GET /api/architecture", s.architecture)
+	mux.HandleFunc("POST /api/architecture/compare", s.compareArchitecture)
 	mux.HandleFunc("GET /api/attention", s.attention)
 	mux.HandleFunc("GET /api/knowledge", s.knowledge)
 	mux.HandleFunc("PUT /api/knowledge", s.recordKnowledge)
@@ -183,10 +185,20 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		limit = 0
 	}
+	depth := 2
+	if value := r.URL.Query().Get("depth"); value != "" {
+		depth, err = strconv.Atoi(value)
+		if err != nil || depth < 1 || depth > 5 {
+			write(w, http.StatusBadRequest, problem{Error: "depth must be between 1 and 5"})
+			return
+		}
+	}
 	graph, err := s.reader.Graph(r.Context(), repository, core.GraphOptions{
 		PathPrefix:   r.URL.Query().Get("path_prefix"),
 		IncludeTests: r.URL.Query().Get("include_tests") == "true",
 		NodeLimit:    limit,
+		Focus:        r.URL.Query().Get("focus"),
+		Depth:        depth,
 		Query:        r.URL.Query().Get("q"),
 	})
 	if err != nil {

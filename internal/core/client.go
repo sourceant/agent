@@ -169,6 +169,8 @@ type GraphOptions struct {
 	PathPrefix   string
 	IncludeTests bool
 	NodeLimit    int
+	Focus        string
+	Depth        int
 	// Query narrows to nodes whose name, id or path holds this, which the core
 	// does: a graph is thousands of nodes and a screen that filters what it was
 	// sent has already been sent all of them.
@@ -178,6 +180,15 @@ type GraphOptions struct {
 // Graph reads one repository's whole scope.
 func (c *Client) Graph(ctx context.Context, repository string, opts GraphOptions) (Graph, error) {
 	query := url.Values{"repository": {repository}}
+	if opts.Focus != "" {
+		query.Set("focus", opts.Focus)
+	}
+	if opts.Depth > 0 {
+		query.Set("depth", strconv.Itoa(opts.Depth))
+	}
+	if opts.Query != "" {
+		query.Set("q", opts.Query)
+	}
 	if opts.PathPrefix != "" {
 		query.Set("path_prefix", opts.PathPrefix)
 	}
