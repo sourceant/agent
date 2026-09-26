@@ -207,7 +207,7 @@ onMounted(async () => {
         </div>
         <UiButton v-if="repositories.length" size="sm" variant="glow" @click="router.push({ path: '/skills/new', query: { for: chosen } })">
           <Plus class="mr-2 h-4 w-4" />
-          Write one down
+          Add skill
         </UiButton>
       </template>
     </PageHead>
@@ -294,7 +294,7 @@ onMounted(async () => {
         </p>
         <UiButton class="mt-4" variant="glow" @click="router.push({ path: '/skills/new', query: { for: chosen } })">
           <Plus class="mr-2 h-4 w-4" />
-          Write one down
+          Add skill
         </UiButton>
       </UiCard>
     </template>
