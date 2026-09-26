@@ -106,7 +106,9 @@ async function search() {
   asking = setTimeout(async () => {
     loading.value = true
     try {
-      const graph = await api.graph(chosen.value, { q: term.value.trim(), nodeLimit: 60 })
+      // The whole scope, because the core narrows what it loaded: a small
+      // limit would filter sixty arbitrary nodes rather than the repository.
+      const graph = await api.graph(chosen.value, { q: term.value.trim(), nodeLimit: 5000 })
       code.value = graph.nodes ?? []
     } catch {
       code.value = []

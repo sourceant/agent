@@ -169,6 +169,10 @@ type GraphOptions struct {
 	PathPrefix   string
 	IncludeTests bool
 	NodeLimit    int
+	// Query narrows to nodes whose name, id or path holds this, which the core
+	// does: a graph is thousands of nodes and a screen that filters what it was
+	// sent has already been sent all of them.
+	Query string
 }
 
 // Graph reads one repository's whole scope.
@@ -182,6 +186,9 @@ func (c *Client) Graph(ctx context.Context, repository string, opts GraphOptions
 	}
 	if opts.NodeLimit > 0 {
 		query.Set("node_limit", strconv.Itoa(opts.NodeLimit))
+	}
+	if opts.Query != "" {
+		query.Set("q", opts.Query)
 	}
 	return get[Graph](ctx, c, "/api/code/graph", query)
 }

@@ -183,6 +183,7 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
 		PathPrefix:   r.URL.Query().Get("path_prefix"),
 		IncludeTests: r.URL.Query().Get("include_tests") == "true",
 		NodeLimit:    limit,
+		Query:        r.URL.Query().Get("q"),
 	})
 	if err != nil {
 		fail(w, err)
