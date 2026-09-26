@@ -14,7 +14,7 @@ import {
   Select,
   Textarea,
 } from '@sourceant/design'
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   Boxes,
   Check,
@@ -22,6 +22,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Search,
   Sparkles,
   Trash2,
   Wand2,
@@ -43,6 +44,15 @@ async function narrowTo(name) {
   chosen.value = name
 }
 const items = ref([])
+const term = ref('')
+
+const shown = computed(() => {
+  const wanted = term.value.trim().toLowerCase()
+  if (!wanted) return items.value
+  return items.value.filter((item) =>
+    `${item.id} ${item.summary ?? ''} ${item.kind ?? ''}`.toLowerCase().includes(wanted),
+  )
+})
 const editing = ref(null)
 const draft = ref({ id: '', kind: 'decision', summary: '', why: '' })
 const problem = ref('')
@@ -181,6 +191,10 @@ onMounted(async () => {
           <Wand2 v-else class="mr-2 h-4 w-4" />
           {{ asking ? 'Finding…' : 'Find more with a model' }}
         </UiButton>
+        <div v-if="items.length > 5" class="relative">
+          <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input v-model="term" size="sm" placeholder="Find something recorded" class="w-56 pl-8" aria-label="Find something recorded" />
+        </div>
         <UiButton v-if="repositories.length && chosen" size="sm" variant="glow" @click="open(null)">
           <Plus class="mr-2 h-4 w-4" />
           Record something
@@ -236,7 +250,7 @@ onMounted(async () => {
 
     <div v-else class="grid gap-3">
       <ItemCard
-        v-for="item in items"
+        v-for="item in shown"
         :key="`${item.repository ?? ''}${item.id}`"
         :title="item.id"
         pillar="memory"

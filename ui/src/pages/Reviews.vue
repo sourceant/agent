@@ -6,6 +6,7 @@ import {
   Chip,
   Diff,
   DotIndicator,
+  Input,
   ItemCard,
   Markdown,
   Empty,
@@ -33,6 +34,7 @@ import {
   GitCommit,
   Lightbulb,
   Loader2,
+  Search,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
@@ -68,6 +70,15 @@ const picked = ref([])
 const adding = ref('')
 const skills = ref([])
 const past = ref([])
+const term = ref('')
+
+const earlier = computed(() => {
+  const wanted = term.value.trim().toLowerCase()
+  if (!wanted) return past.value
+  return past.value.filter((one) =>
+    `${one.title ?? ''} ${one.repository ?? ''} ${one.status ?? ''}`.toLowerCase().includes(wanted),
+  )
+})
 const tab = ref('overview')
 
 const files = computed(() => result.value?.changed ?? [])
@@ -479,10 +490,16 @@ onMounted(async () => {
           </Empty>
 
           <template v-if="past.length">
-            <p class="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Earlier</p>
+            <div class="mb-2 flex items-center justify-between gap-3">
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Earlier</p>
+              <div v-if="past.length > 5" class="relative">
+                <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input v-model="term" size="sm" placeholder="Find a review" class="w-48 pl-8" aria-label="Find a review" />
+              </div>
+            </div>
             <div class="space-y-2">
               <ItemCard
-                v-for="one in past"
+                v-for="one in earlier"
                 :key="one.id"
                 :title="one.title || one.repository"
                 :subtitle="one.id"
