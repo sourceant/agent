@@ -12,7 +12,6 @@ import {
   Select,
   Tabs,
   Textarea,
-  ToggleList,
 } from '@sourceant/design'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -78,6 +77,30 @@ const panes = [
   { id: 'write', label: 'Write' },
   { id: 'preview', label: 'Preview' },
 ]
+
+const REVIEW = 'review'
+
+// Reviews is the one use this product acts on, so it is the one offered. Auto
+// is nobody having said, which leaves it to the change.
+const answers = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'always', label: 'Always' },
+  { id: 'never', label: 'Never' },
+]
+
+const uses = computed(() => {
+  const said = draft.value.applications?.[REVIEW]
+  if (said === true) return 'always'
+  if (said === false) return 'never'
+  return 'auto'
+})
+
+function useFor(said) {
+  const applications = { ...draft.value.applications }
+  if (said === 'auto') delete applications[REVIEW]
+  else applications[REVIEW] = said === 'always'
+  draft.value.applications = applications
+}
 
 // Both kept in the skill's own file, in the fields the format sets aside for
 // them, so a skill carrying either stays portable.
@@ -263,50 +286,36 @@ onMounted(async () => {
     <p v-if="loading" class="py-10 text-center text-sm text-muted-foreground">Reading it.</p>
 
     <template v-else>
-      <UiCard class="mb-3 grid gap-4 p-5 lg:grid-cols-3">
-        <Field
-          label="Name"
-          for="skill-id"
-          hint="Lower case words joined by hyphens. It names the folder the skill is saved in."
-        >
-          <Input
-            id="skill-id"
-            v-model="draft.id"
-            :readonly="!!skill && !theirs"
-            placeholder="retry-limit"
-          />
-        </Field>
-        <Field
-          label="Used for"
-          for="skill-belongs"
-          :hint="forEverything
-            ? 'Read for every repository you work in.'
-            : 'Read only when reviewing that repository.'"
-        >
-          <Select
-            id="skill-belongs"
-            v-model="belongsTo"
-            :disabled="!!skill && !theirs"
-            class="w-full"
+      <UiCard class="mb-3 p-5">
+        <h2 class="mb-4 text-sm font-semibold">What it is</h2>
+        <div class="grid gap-4 lg:grid-cols-3">
+          <Field
+            label="Name"
+            for="skill-id"
+            hint="Lower case words joined by hyphens. It names the folder the skill is saved in."
           >
-            <option v-for="one in belongings" :key="one.id" :value="one.id">{{ one.label }}</option>
-          </Select>
-        </Field>
+            <Input
+              id="skill-id"
+              v-model="draft.id"
+              :readonly="!!skill && !theirs"
+              placeholder="retry-limit"
+            />
+          </Field>
+          <Field
+            class="lg:col-span-2"
+            label="When it applies"
+            for="skill-description"
+            hint="One sentence. It decides whether a change gets read against this skill."
+          >
+            <Input
+              id="skill-description"
+              v-model="draft.description"
+              placeholder="Use when a change adds or edits a database migration."
+            />
+          </Field>
+        </div>
         <Field
-          label="When it applies"
-          for="skill-description"
-          hint="One sentence. It decides whether a change gets read against this skill."
-        >
-          <Input
-            id="skill-description"
-            v-model="draft.description"
-            placeholder="Use when a change adds or edits a database migration."
-          />
-        </Field>
-      </UiCard>
-
-      <UiCard class="mb-3 grid gap-4 p-5 lg:grid-cols-2">
-        <Field
+          class="mt-4"
           label="Files it is about"
           for="skill-paths"
           hint="Globs, one to a line. Named here, a change is read against this only when it
@@ -320,23 +329,45 @@ onMounted(async () => {
             placeholder="db/migrations/**"
           />
         </Field>
+      </UiCard>
 
-        <Field
-          label="What it is for"
-          hint="review is the purpose this product reads. Any other name is there for an agent to ask by."
-        >
-          <ToggleList v-model="draft.applications" :suggestions="['review']" noun="a purpose" />
-          <p class="mt-2 text-xs text-muted-foreground">
-            A purpose nobody names is decided by the change: picked when its wording or its files
-            match what changed.
-          </p>
-        </Field>
-
-        <Field label="Read as" hint="What it is for and how it is read are different questions.">
-          <Select v-model="draft.type" class="w-full">
-            <option v-for="one in kinds" :key="one.id" :value="one.id">{{ one.label }}</option>
-          </Select>
-        </Field>
+      <UiCard class="mb-3 p-5">
+        <h2 class="mb-4 text-sm font-semibold">How it is used</h2>
+        <div class="grid gap-4 lg:grid-cols-3">
+          <Field
+            label="Skill uses"
+            hint="Reviews is the one use SourceAnt acts on. Auto leaves it to the change."
+          >
+            <Tabs
+              :model-value="uses"
+              :tabs="answers"
+              size="sm"
+              label="Whether reviews use this skill"
+              @update:model-value="useFor"
+            />
+          </Field>
+          <Field label="Read as" hint="What it is used for and how it is read are different questions.">
+            <Select v-model="draft.type" class="w-full">
+              <option v-for="one in kinds" :key="one.id" :value="one.id">{{ one.label }}</option>
+            </Select>
+          </Field>
+          <Field
+            label="Kept for"
+            for="skill-belongs"
+            :hint="forEverything
+              ? 'Read for every repository you work in.'
+              : 'Read only when reviewing that repository.'"
+          >
+            <Select
+              id="skill-belongs"
+              v-model="belongsTo"
+              :disabled="!!skill && !theirs"
+              class="w-full"
+            >
+              <option v-for="one in belongings" :key="one.id" :value="one.id">{{ one.label }}</option>
+            </Select>
+          </Field>
+        </div>
       </UiCard>
 
       <div class="mb-2 flex items-center justify-between gap-3">

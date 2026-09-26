@@ -9,7 +9,6 @@ import {
   Select,
   Table,
   Tabs,
-  ToggleList,
 } from '@sourceant/design'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -37,25 +36,26 @@ const REPOSITORY = 'repository'
 const GLOBAL = 'global'
 const OURS = [REPOSITORY, GLOBAL]
 
-/* What a skill is for is one question with one answer: the purposes it applies
- * to. The file says it, and a skill that belongs to a coding agent cannot be
- * edited, so for the purpose this product reads the answer is kept here as well
- * and outranks the file. */
+/* What a skill is used for is stored on the skill, as a purpose that applies or
+ * does not. Reviews is the one this product acts on, so it is the one offered:
+ * a box to type any other name in would be a box with nothing behind it.
+ *
+ * A skill belonging to a coding agent cannot be edited, so the answer for
+ * reviews is also kept on this machine, where it outranks the file. */
 const REVIEW = 'review'
 const NEVER = 'skills.never_in_reviews'
 const ALWAYS = 'skills.always_in_reviews'
 
-const KINDS = {
-  guidance: 'guidance',
-  'review-pass': 'review pass',
-  'initialization-pass': 'initialization pass',
-}
+const answers = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'always', label: 'Always' },
+  { id: 'never', label: 'Never' },
+]
 
 const columns = [
   { id: 'skill', label: 'Skill' },
-  { id: 'applies', label: 'Applies to', width: '20rem' },
-  { id: 'kind', label: 'Read as', narrow: true },
-  { id: 'kept', label: 'Kept', narrow: true },
+  { id: 'uses', label: 'Skill uses', width: '14rem' },
+  { id: 'source', label: 'Source', narrow: true },
   { id: 'actions', label: '', align: 'right', width: '3rem' },
 ]
 
@@ -99,37 +99,29 @@ const ours = (skill) => OURS.includes(skill.origin)
 const home = (skill) =>
   skill.origin === GLOBAL ? 'everywhere' : skill.origin === REPOSITORY ? chosen.value : skill.origin
 
-// What the skill is for, with what this machine said about reviews on top of
-// what its file says.
-function applies(skill) {
-  const said = { ...(skill.applications ?? {}) }
-  if (lists.value[NEVER].includes(skill.id)) said[REVIEW] = false
-  else if (lists.value[ALWAYS].includes(skill.id)) said[REVIEW] = true
-  else if (!(REVIEW in said) && skill.reviews !== null) said[REVIEW] = skill.reviews
-  return said
+// Whether reviews use it: what its file says, with what this machine said on
+// top. Nobody having said is not the same as a no.
+function used(skill) {
+  if (lists.value[NEVER].includes(skill.id)) return 'never'
+  if (lists.value[ALWAYS].includes(skill.id)) return 'always'
+  const said = skill.applications?.[REVIEW] ?? skill.reviews
+  if (said === true) return 'always'
+  if (said === false) return 'never'
+  return 'auto'
 }
 
 // Whether a review would read it at all, which is what the filter narrows to.
 function read(skill) {
-  const said = applies(skill)[REVIEW]
-  if (said === false) return false
-  if (said === true) return true
+  const said = used(skill)
+  if (said !== 'auto') return said === 'always'
   return skill.automatic
 }
 
 async function decide(skill, said) {
-  const was = applies(skill)
-  const purposes = new Set([...Object.keys(was), ...Object.keys(said)])
-  const changed = [...purposes].filter((purpose) => was[purpose] !== said[purpose])
-  if (!changed.length) return
-
-  if (!ours(skill) && changed.some((purpose) => purpose !== REVIEW)) {
-    error.value = `${skill.name} belongs to ${skill.origin}. Save your own copy to change what it is for.`
-    return
-  }
+  if (said === used(skill)) return
   try {
     if (ours(skill)) await state(skill, said)
-    else await override(skill, said[REVIEW])
+    else await override(skill, said)
     error.value = ''
   } catch (caught) {
     error.value = caught.message
@@ -137,9 +129,13 @@ async function decide(skill, said) {
   await load()
 }
 
-// One of ours: what it is for belongs in its own file, so it travels with it.
+// One of ours: what it is used for belongs in its own file, so it travels with
+// the skill rather than staying on this machine.
 async function state(skill, said) {
   const full = await api.skill(skill.id, skill.origin === REPOSITORY ? chosen.value : '')
+  const applications = { ...(full.applications ?? {}) }
+  if (said === 'auto') delete applications[REVIEW]
+  else applications[REVIEW] = said === 'always'
   await api.recordSkill({
     scope: skill.origin,
     repository: skill.origin === REPOSITORY ? chosen.value : '',
@@ -149,10 +145,10 @@ async function state(skill, said) {
     body: full.body ?? '',
     paths: full.paths ?? [],
     type: full.type ?? '',
-    applications: said,
+    applications,
   })
   // A file that now says it for itself needs nothing said here.
-  await override(skill, undefined)
+  await override(skill, 'auto')
 }
 
 // Somebody else's file: the answer for reviews is kept on this machine instead.
@@ -161,8 +157,8 @@ async function override(skill, said) {
     [NEVER]: lists.value[NEVER].filter((id) => id !== skill.id),
     [ALWAYS]: lists.value[ALWAYS].filter((id) => id !== skill.id),
   }
-  if (said === false) next[NEVER].push(skill.id)
-  if (said === true) next[ALWAYS].push(skill.id)
+  if (said === 'never') next[NEVER].push(skill.id)
+  if (said === 'always') next[ALWAYS].push(skill.id)
   for (const key of [NEVER, ALWAYS]) {
     if (next[key].join('\n') !== lists.value[key].join('\n')) {
       await api.setSetting(key, next[key].join('\n'))
@@ -247,8 +243,9 @@ onMounted(async () => {
         </label>
       </div>
       <p class="mb-4 text-xs text-muted-foreground">
-        A purpose nobody said is decided by the change: a skill is picked when its wording or its
-        files match what changed, and at most five are read against one change.
+        Reviews is the one use SourceAnt acts on. Auto lets the change decide: a skill is picked
+        when its wording or its files match what changed, and at most five are read against one
+        change.
       </p>
 
       <Table v-if="shown.length" :columns="columns" :rows="shown" row-key="id" label="Skills">
@@ -263,21 +260,17 @@ onMounted(async () => {
           </button>
         </template>
 
-        <template #applies="{ row }">
-          <ToggleList
-            :model-value="applies(row)"
-            :suggestions="['review']"
-            :addable="false"
-            :refusal="ours(row) ? '' : `Only reviews can be answered for ${row.origin}'s own file.`"
+        <template #uses="{ row }">
+          <Tabs
+            :model-value="used(row)"
+            :tabs="answers"
+            size="sm"
+            :label="`Whether reviews use ${row.name}`"
             @update:model-value="decide(row, $event)"
           />
         </template>
 
-        <template #kind="{ row }">
-          <span class="text-xs text-muted-foreground">{{ KINDS[row.type] ?? row.type }}</span>
-        </template>
-
-        <template #kept="{ row }">
+        <template #source="{ row }">
           <UiBadge :variant="ours(row) ? 'success' : 'outline'">{{ home(row) }}</UiBadge>
         </template>
 
