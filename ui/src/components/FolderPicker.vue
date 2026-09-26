@@ -45,8 +45,7 @@ async function add() {
   busy.value = true
   problem.value = ''
   try {
-    const repository = await api.addRepository(listing.value.path, name.value.trim())
-    await api.index(repository.name)
+    await api.addRepository(listing.value.path, name.value.trim())
     emit('added')
     emit('close')
   } catch (error) {

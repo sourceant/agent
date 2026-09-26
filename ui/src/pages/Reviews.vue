@@ -42,6 +42,7 @@ import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useUp } from '~/composables/useUp'
 import { EVERY, useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
+import { when } from '~/moments'
 
 /* Work read before anybody else has been asked to read it.
  *
@@ -256,17 +257,6 @@ async function loadPast() {
   } catch {
     past.value = []
   }
-}
-
-function when(stamp) {
-  if (!stamp) return ''
-  const at = new Date(stamp)
-  const ago = Math.round((Date.now() - at.getTime()) / 60000)
-  if (ago < 1) return 'just now'
-  if (ago < 60) return `${ago} minute${ago === 1 ? '' : 's'} ago`
-  const hours = Math.round(ago / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
-  return at.toLocaleDateString()
 }
 
 async function checkModel() {

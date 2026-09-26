@@ -7,11 +7,12 @@ import {
   Notice,
   PageHead,
 } from '@sourceant/design'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Boxes, Plus, Trash2, RefreshCw, FileCode, Link2, Folder, Loader2 } from 'lucide-vue-next'
 import FolderPicker from '~/components/FolderPicker.vue'
 import { useRepositories } from '~/composables/useRepositories'
+import { when } from '~/moments'
 import { api } from '~/api'
 
 const router = useRouter()
@@ -23,6 +24,8 @@ const picking = ref(false)
 // repository that has not changed reports nothing changed, which is a result;
 // showing no result at all is indistinguishable from the button not working.
 const lastRead = ref({})
+const reading = computed(() => repositories.value.some((one) => one.reading))
+let asking = null
 
 async function countAll() {
   for (const repository of repositories.value) {
@@ -39,6 +42,20 @@ async function countAll() {
 async function refresh() {
   await fetchRepositories()
   await countAll()
+  keepAsking()
+}
+
+// A read that somebody else started, by adding a folder or on the schedule,
+// finishes without anybody pressing anything here. Only the list is asked for
+// while it runs: counting means a call per repository.
+function keepAsking() {
+  clearTimeout(asking)
+  if (!reading.value) return
+  asking = setTimeout(async () => {
+    await fetchRepositories()
+    if (!reading.value) await countAll()
+    keepAsking()
+  }, 2000)
 }
 
 async function reindex(name) {
@@ -51,13 +68,19 @@ async function reindex(name) {
     error.value = problem.message
   }
   working.value = ''
-  await countAll()
+  await refresh()
 }
 
 function readingSaid(read) {
   if (!read) return ''
   if (read.indexed) return `Read ${read.indexed.toLocaleString()} files just now.`
   return 'Nothing had changed.'
+}
+
+function freshness(repository) {
+  if (repository.reading) return 'Reading…'
+  if (!repository.indexed_at) return 'Not read yet'
+  return `Read ${when(repository.indexed_at)}`
 }
 
 async function drop(repository) {
@@ -71,6 +94,7 @@ async function drop(repository) {
 }
 
 onMounted(refresh)
+onUnmounted(() => clearTimeout(asking))
 </script>
 
 <template>
@@ -119,8 +143,10 @@ onMounted(refresh)
               <Link2 class="h-3.5 w-3.5" />{{ counts[repository.name].links.toLocaleString() }} links
             </span>
           </template>
-          <span v-else-if="counts[repository.name] === null">Not read yet. Re-index to read it.</span>
-          <span v-else>Reading…</span>
+          <span class="flex items-center gap-1.5">
+            <Loader2 v-if="repository.reading" class="h-3.5 w-3.5 animate-spin" />
+            {{ freshness(repository) }}
+          </span>
           <span v-if="lastRead[repository.name]" class="text-primary">
             {{ readingSaid(lastRead[repository.name]) }}
           </span>
@@ -129,7 +155,7 @@ onMounted(refresh)
           <UiButton
             variant="outline"
             size="sm"
-            :disabled="working === repository.name"
+            :disabled="working === repository.name || repository.reading"
             @click.stop="reindex(repository.name)"
           >
             <Loader2 v-if="working === repository.name" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
