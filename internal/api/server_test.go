@@ -33,6 +33,10 @@ type stubReader struct {
 	asked           core.Ask
 	stated          core.Stated
 	settings        []core.Setting
+	offered         []core.Offering
+	usable          core.Usable
+	askedModel      string
+	askedKey        string
 	setKey          string
 	setValue        any
 	registered      core.Repository
@@ -143,6 +147,15 @@ func (s *stubReader) Reviews(_ context.Context, repository string) ([]core.Readi
 
 func (s *stubReader) Settings(context.Context) ([]core.Setting, error) {
 	return s.settings, s.err
+}
+
+func (s *stubReader) Models(context.Context) ([]core.Offering, error) {
+	return s.offered, s.err
+}
+
+func (s *stubReader) CheckModel(_ context.Context, model, key, _ string) (core.Usable, error) {
+	s.askedModel, s.askedKey = model, key
+	return s.usable, s.err
 }
 
 func (s *stubReader) SetSetting(_ context.Context, key string, value any) (core.Setting, error) {

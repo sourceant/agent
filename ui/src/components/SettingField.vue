@@ -1,6 +1,13 @@
 <script setup>
 import { RotateCcw } from 'lucide-vue-next'
-import { Badge as UiBadge, Field, Input, ListInput, Select } from '@sourceant/design'
+import {
+  Badge as UiBadge,
+  Field,
+  Input,
+  ListInput,
+  SearchableSelect,
+  Select,
+} from '@sourceant/design'
 
 /* One setting, drawn from what the core says about it.
  *
@@ -11,6 +18,9 @@ import { Badge as UiBadge, Field, Input, ListInput, Select } from '@sourceant/de
 
 defineProps({
   setting: { type: Object, required: true },
+  // One of a known set, where somebody else keeps the set. Long enough that a
+  // native select is useless, which is what SearchableSelect is for.
+  options: { type: Array, default: () => [] },
 })
 
 defineEmits(['reset'])
@@ -40,7 +50,16 @@ function touched(setting) {
       </button>
     </template>
 
-    <Select v-if="setting.choices?.length" :id="setting.key" v-model="modelValue" class="w-full">
+    <SearchableSelect
+      v-if="options.length"
+      v-model="modelValue"
+      :options="options"
+      empty-label="Nothing chosen"
+      placeholder="Choose one"
+      search-placeholder="Search"
+    />
+
+    <Select v-else-if="setting.choices?.length" :id="setting.key" v-model="modelValue" class="w-full">
       <option v-for="choice in setting.choices" :key="choice" :value="choice">{{ choice }}</option>
     </Select>
 

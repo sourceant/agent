@@ -8,7 +8,8 @@ import {
   Tabs,
 } from '@sourceant/design'
 import { computed, onMounted, ref } from 'vue'
-import { Settings as SettingsIcon, Sun, Moon } from 'lucide-vue-next'
+import { useRoute } from 'vue-router'
+import { CircleCheck, Loader2, Settings as SettingsIcon, Sun, Moon } from 'lucide-vue-next'
 import McpPanel from '~/components/McpPanel.vue'
 import SettingsPanel from '~/components/SettingsPanel.vue'
 import { useTheme } from '~/composables/useTheme'
@@ -24,12 +25,15 @@ import { api } from '~/api'
 const OVERVIEW = 'overview'
 const MCP = 'mcp'
 
+const route = useRoute()
 const { isDark, toggleTheme } = useTheme()
 const status = ref(null)
 const repositories = ref([])
 const groups = ref([])
 const problem = ref('')
 const tab = ref(OVERVIEW)
+const accepts = ref(null)
+const checking = ref(false)
 
 const tabs = computed(() => [
   { id: OVERVIEW, label: 'Overview' },
@@ -41,6 +45,21 @@ const model = computed(() => {
   const named = status.value?.model
   return named || 'None chosen'
 })
+
+/* Whether the pair that was just saved actually works, asked of the provider.
+ * A key that is wrong otherwise shows up as a review failing much later, by
+ * which time nobody connects the two. Nothing to check is nothing said. */
+async function onSaved() {
+  accepts.value = null
+  if (tab.value !== 'Model') return
+  checking.value = true
+  try {
+    accepts.value = await api.checkModel()
+  } catch {
+    accepts.value = null
+  }
+  checking.value = false
+}
 
 onMounted(async () => {
   try {
@@ -56,6 +75,10 @@ onMounted(async () => {
     }
     repositories.value = folders
     groups.value = [...new Set(settings.map((s) => s.group).filter(Boolean))].sort()
+    // Opened from somewhere that knows which group it wants, such as a screen
+    // saying no model is configured.
+    const asked = String(route.query.group ?? '')
+    if (groups.value.includes(asked)) tab.value = asked
   } catch (error) {
     problem.value = error.message
   }
@@ -140,7 +163,19 @@ onMounted(async () => {
         Reading a repository needs none of this. Anything that proposes or judges rather than
         reads does, and it stays off until you say which model to ask.
       </p>
-      <SettingsPanel :key="tab" :group="tab" />
+      <SettingsPanel :key="tab" :group="tab" @saved="onSaved" />
+
+      <p v-if="checking" class="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 class="h-3.5 w-3.5 animate-spin" />
+        Asking the provider whether that key can use that model.
+      </p>
+      <Notice v-else-if="accepts" :tone="accepts.usable ? 'success' : 'danger'" class="mt-4">
+        <template v-if="accepts.usable">
+          <CircleCheck class="mr-1.5 inline h-3.5 w-3.5" />
+          That key can use that model.
+        </template>
+        <template v-else>{{ accepts.reason }}</template>
+      </Notice>
     </UiCard>
   </div>
 </template>

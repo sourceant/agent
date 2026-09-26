@@ -41,6 +41,8 @@ type Reader interface {
 	Reviewed(ctx context.Context, id string) (core.Reading, error)
 	Reviews(ctx context.Context, repository string) ([]core.Reading, error)
 	Settings(ctx context.Context) ([]core.Setting, error)
+	Models(ctx context.Context) ([]core.Offering, error)
+	CheckModel(ctx context.Context, model, key, baseURL string) (core.Usable, error)
 	SetSetting(ctx context.Context, key string, value any) (core.Setting, error)
 	ResetSetting(ctx context.Context, key string) (core.Setting, error)
 }
@@ -120,6 +122,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/settings", s.settings)
 	mux.HandleFunc("PUT /api/settings", s.setSetting)
 	mux.HandleFunc("DELETE /api/settings", s.resetSetting)
+	mux.HandleFunc("GET /api/models", s.models)
+	mux.HandleFunc("POST /api/models/check", s.checkModel)
 	mux.HandleFunc("GET /api/skills", s.skills)
 	mux.HandleFunc("GET /api/skills/{id...}", s.skill)
 	mux.HandleFunc("PUT /api/skills", s.recordSkill)
@@ -427,6 +431,36 @@ func (s *Server) setSetting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, http.StatusOK, setting)
+}
+
+func (s *Server) models(w http.ResponseWriter, r *http.Request) {
+	offered, err := s.reader.Models(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	// None is an empty list, never a null, so a screen can draw it.
+	if offered == nil {
+		offered = []core.Offering{}
+	}
+	write(w, http.StatusOK, offered)
+}
+
+func (s *Server) checkModel(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Model   string `json:"model"`
+		APIKey  string `json:"api_key"`
+		BaseURL string `json:"base_url"`
+	}
+	if !readBody(w, r, &body) {
+		return
+	}
+	answer, err := s.reader.CheckModel(r.Context(), body.Model, body.APIKey, body.BaseURL)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, answer)
 }
 
 func (s *Server) resetSetting(w http.ResponseWriter, r *http.Request) {

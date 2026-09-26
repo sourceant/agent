@@ -598,6 +598,33 @@ func (c *Client) SetSetting(ctx context.Context, key string, value any) (Setting
 		nil, map[string]any{"value": value})
 }
 
+// Offering is one provider and the models it can be asked for.
+type Offering struct {
+	Provider string   `json:"provider"`
+	Models   []string `json:"models"`
+}
+
+// Models is every model this machine can name, by provider.
+//
+// Read from the core rather than written down here: the list changes with the
+// router that makes the call, not with this process.
+func (c *Client) Models(ctx context.Context) ([]Offering, error) {
+	return get[[]Offering](ctx, c, "/api/local/settings/models", nil)
+}
+
+// Usable is whether a key may ask for a model, and why not when it may not.
+type Usable struct {
+	Usable bool   `json:"usable"`
+	Reason string `json:"reason"`
+}
+
+// CheckModel asks the provider whether this pair works. Anything left empty is
+// taken from what is set on this machine.
+func (c *Client) CheckModel(ctx context.Context, model, key, baseURL string) (Usable, error) {
+	return send[Usable](ctx, c, http.MethodPost, "/api/local/settings/models/check", nil,
+		map[string]string{"model": model, "api_key": key, "base_url": baseURL})
+}
+
 // ResetSetting puts one setting back to what it would be if nobody had touched it.
 func (c *Client) ResetSetting(ctx context.Context, key string) (Setting, error) {
 	return send[Setting](ctx, c, http.MethodDelete,

@@ -458,7 +458,10 @@ onMounted(async () => {
     <template v-else>
       <Notice v-if="!hasModel && chosen" tone="info" class="mb-4">
         No model is configured, so nothing here can be judged. Reading what changed needs nothing.
-        Choose a model in Settings to have the work read against your skills.
+        <RouterLink to="/settings?group=Model" class="font-medium underline">
+          Choose a model
+        </RouterLink>
+        to have the work read against your skills.
       </Notice>
 
       <template v-if="!result">

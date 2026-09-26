@@ -32,6 +32,10 @@ const saved = ref(false)
 const mine = computed(() => settings.value.filter((s) => s.group === props.group))
 // Tuning is kept behind a line somebody has to open, because a screen of
 // twenty fields asks twenty questions and most of them have an answer already.
+// The one setting that is a choice from a list somebody else keeps.
+const CATALOGUE = 'model.name'
+const offered = ref([])
+
 const plain = computed(() => mine.value.filter((s) => !s.advanced))
 const tuning = computed(() => mine.value.filter((s) => s.advanced))
 const opened = ref(false)
@@ -64,11 +68,30 @@ const changed = computed(() =>
   }),
 )
 
+// Every model the core can name, grouped by provider. A model already set that
+// no provider lists is offered too, or the field reads as nothing being set.
+const choices = computed(() => {
+  const named = offered.value.flatMap((one) =>
+    one.models.map((model) => ({ value: model, label: model, group: one.provider })),
+  )
+  const current = String(settings.value.find((one) => one.key === CATALOGUE)?.value ?? '')
+  if (current && !named.some((one) => one.value === current)) {
+    return [{ value: current, label: current, group: 'In force' }, ...named]
+  }
+  return named
+})
+
+const optionsFor = (setting) => (setting.key === CATALOGUE ? choices.value : [])
+
 async function load() {
   loading.value = true
   try {
     settings.value = await api.settings()
     draft.value = Object.fromEntries(mine.value.map((s) => [s.key, shown(s)]))
+    // Only where the setting that needs it is on this screen.
+    if (mine.value.some((one) => one.key === CATALOGUE) && !offered.value.length) {
+      offered.value = await api.models().catch(() => [])
+    }
     problem.value = ''
   } catch (caught) {
     problem.value = caught.message
@@ -125,6 +148,7 @@ onMounted(load)
         :key="setting.key"
         v-model="draft[setting.key]"
         :setting="setting"
+        :options="optionsFor(setting)"
         @reset="reset"
       />
 

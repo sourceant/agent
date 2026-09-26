@@ -87,6 +87,14 @@ export const api = {
   reviews: (repository = '') => call(`/api/reviews?${query({ repository })}`),
 
   settings: () => call('/api/settings'),
+  /* Which models can be named, and whether the key here can use one. Both come
+   * from the core: it is the thing that would make the call. */
+  models: () => call('/api/models'),
+  checkModel: (model = '', apiKey = '', baseUrl = '') =>
+    call('/api/models/check', {
+      method: 'POST',
+      body: JSON.stringify({ model, api_key: apiKey, base_url: baseUrl }),
+    }),
   setSetting: (key, value) =>
     call('/api/settings', { method: 'PUT', body: JSON.stringify({ key, value }) }),
   resetSetting: (key) => call(`/api/settings?${query({ key })}`, { method: 'DELETE' }),
