@@ -262,15 +262,15 @@ onMounted(async () => {
             <div>
               <h2 class="flex items-center gap-2 text-sm font-semibold">
                 <FileCode class="h-4 w-4" />
-                Hotspots
+                Changed most, depended on most
               </h2>
-              <p class="mt-0.5 text-xs text-muted-foreground">
-                Changed most, and most depended on{{ attention.since ? `, last ${attention.since}` : '' }}.
+              <p v-if="attention.since" class="mt-0.5 text-xs text-muted-foreground">
+                Last {{ attention.since }}.
               </p>
             </div>
           </div>
           <Empty v-if="!attention.files.length" title="None" compact>
-            A file has to be both changing and depended on to appear here.
+            A file appears here when it is both changing and depended on.
           </Empty>
           <ul v-else class="divide-y">
             <li

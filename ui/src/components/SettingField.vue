@@ -69,11 +69,11 @@ function touched(setting) {
     </label>
 
     <ListInput
-      v-else-if="setting.listed"
+      v-else-if="setting.listed || setting.type === 'json'"
       v-model="modelValue"
       mono
-      noun="a folder"
-      placeholder="/home/you/work/knowledgebase/skills"
+      :noun="setting.type === 'json' ? 'a path' : 'a folder'"
+      :placeholder="setting.type === 'json' ? 'node_modules' : '/home/you/work/knowledgebase/skills'"
     />
 
     <Input
