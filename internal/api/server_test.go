@@ -6,8 +6,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/sourceant/agent/internal/browse"
 	"github.com/sourceant/agent/internal/core"
 )
 
@@ -276,5 +279,43 @@ func decode(t *testing.T, response *httptest.ResponseRecorder, into any) {
 	t.Helper()
 	if err := json.Unmarshal(response.Body.Bytes(), into); err != nil {
 		t.Fatalf("decoding %q: %v", response.Body.String(), err)
+	}
+}
+
+func TestBrowsingBySearchAnswersWithWhatMatches(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"work/billing/.git", "work/notes"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatalf("building the tree: %v", err)
+		}
+	}
+	t.Setenv("HOME", root)
+	server := New(&stubReader{up: true}, stubSupervisor{}, "1.2.3", "http://127.0.0.1:8931")
+
+	response := call(t, server, "/api/browse?q=bill")
+
+	var listing browse.Listing
+	decode(t, response, &listing)
+	if len(listing.Entries) != 1 || listing.Entries[0].Name != "billing" {
+		t.Fatalf("got %v, want the billing directory", listing.Entries)
+	}
+	if !listing.Entries[0].Repository {
+		t.Error("a working tree was not marked as one")
+	}
+}
+
+func TestBrowsingWithNoSearchStillListsOneDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "work"), 0o755); err != nil {
+		t.Fatalf("building the tree: %v", err)
+	}
+	server := New(&stubReader{up: true}, stubSupervisor{}, "1.2.3", "http://127.0.0.1:8931")
+
+	response := call(t, server, "/api/browse?path="+root)
+
+	var listing browse.Listing
+	decode(t, response, &listing)
+	if listing.Path != root || len(listing.Entries) != 1 {
+		t.Fatalf("got %v at %s, want the one directory", listing.Entries, listing.Path)
 	}
 }

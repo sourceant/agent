@@ -3,6 +3,7 @@ package browse
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -99,5 +100,73 @@ func TestNowhereNamedStartsAtHome(t *testing.T) {
 func TestADirectoryThatIsNotThereIsAnError(t *testing.T) {
 	if _, err := At(filepath.Join(t.TempDir(), "nowhere")); err == nil {
 		t.Fatal("listed a directory that does not exist")
+	}
+}
+
+func TestItFindsAFolderByName(t *testing.T) {
+	root := tree(t)
+	t.Setenv("HOME", root)
+
+	found, err := Find("bill")
+	if err != nil {
+		t.Fatalf("finding: %v", err)
+	}
+
+	if len(found) != 1 || found[0].Name != "billing" {
+		t.Fatalf("got %v, want the billing directory", found)
+	}
+	if !found[0].Repository {
+		t.Error("the billing directory is a working tree and was not marked as one")
+	}
+}
+
+func TestItAnswersWithWorkingTreesFirst(t *testing.T) {
+	root := tree(t)
+	if err := os.MkdirAll(filepath.Join(root, "notes-billing"), 0o755); err != nil {
+		t.Fatalf("building the tree: %v", err)
+	}
+	t.Setenv("HOME", root)
+
+	found, err := Find("billing")
+	if err != nil {
+		t.Fatalf("finding: %v", err)
+	}
+
+	if len(found) != 2 || !found[0].Repository || found[0].Name != "billing" {
+		t.Fatalf("got %v, want the working tree first", found)
+	}
+}
+
+func TestItLeavesDependenciesAndHiddenDirectoriesAlone(t *testing.T) {
+	root := tree(t)
+	for _, dir := range []string{"work/node_modules/billing-ui", ".hidden/billing-old"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatalf("building the tree: %v", err)
+		}
+	}
+	t.Setenv("HOME", root)
+
+	found, err := Find("billing")
+	if err != nil {
+		t.Fatalf("finding: %v", err)
+	}
+
+	for _, entry := range found {
+		if strings.Contains(entry.Path, "node_modules") || strings.Contains(entry.Path, ".hidden") {
+			t.Errorf("%s should not have been walked", entry.Path)
+		}
+	}
+}
+
+func TestItAnswersWithNothingForAnEmptyTerm(t *testing.T) {
+	root := tree(t)
+	t.Setenv("HOME", root)
+
+	found, err := Find("   ")
+	if err != nil {
+		t.Fatalf("finding: %v", err)
+	}
+	if len(found) != 0 {
+		t.Errorf("got %v, want nothing", found)
 	}
 }

@@ -46,7 +46,7 @@ export const api = {
   forgetKnowledge: (repository, id) =>
     call(`/api/knowledge?${query({ repository, id })}`, { method: 'DELETE' }),
 
-  browse: (path = '') => call(`/api/browse?${query({ path })}`),
+  browse: (path = '', q = '') => call(`/api/browse?${query({ path, q })}`),
 
   /* Reading what a repository already states. Asking without recording is the
    * safe half, so a person can see what would be written before it is. */
