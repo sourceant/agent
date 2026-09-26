@@ -341,9 +341,15 @@ type Skill struct {
 	Origin      string   `json:"origin"`
 	Path        string   `json:"path"`
 	Paths       []string `json:"paths"`
-	Reviews     *bool    `json:"reviews"`
-	Automatic   bool     `json:"automatic"`
-	Body        string   `json:"body,omitempty"`
+	// Type is how it is read: prose the reviewer is told, or a pass of its own.
+	// Not what it is for, which is what Applications answers.
+	Type    string `json:"type"`
+	Reviews *bool  `json:"reviews"`
+	// Applications is what the skill is for: a purpose, and whether it applies
+	// to it. Reviews is the one purpose this product reads, answered from here.
+	Applications map[string]bool `json:"applications"`
+	Automatic    bool            `json:"automatic"`
+	Body         string          `json:"body,omitempty"`
 }
 
 // SkillPage is the skills on hand.
@@ -382,6 +388,10 @@ type Stated struct {
 	Body        string   `json:"body"`
 	Paths       []string `json:"paths"`
 	Reviews     *bool    `json:"reviews"`
+	// What it is for, and how it is read. Two questions: a skill can be for
+	// several things, and being read as a pass of its own is not one of them.
+	Applications map[string]bool `json:"applications"`
+	Type         string          `json:"type"`
 }
 
 // RecordSkill writes a skill down, in a repository or on this machine.

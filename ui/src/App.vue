@@ -18,6 +18,7 @@ import {
 import { createAvatar } from '@dicebear/core'
 import { notionists } from '@dicebear/collection'
 import { useTheme } from '~/composables/useTheme'
+import Finder from '~/components/Finder.vue'
 import Onboarding from '~/components/Onboarding.vue'
 
 const { isDark, toggleTheme, restoreTheme } = useTheme()
@@ -84,6 +85,8 @@ onUnmounted(() => document.removeEventListener('click', closeDropdowns))
         </nav>
 
         <div class="flex-1 min-w-0" />
+
+        <Finder :pages="navigation" />
 
         <div class="relative shrink-0" data-dropdown="user">
           <button

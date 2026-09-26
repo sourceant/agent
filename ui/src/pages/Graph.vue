@@ -1,17 +1,24 @@
 <script setup>
 import { onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { Network } from 'lucide-vue-next'
 import { Notice, PageHead, Select } from '@sourceant/design'
 import GraphWorkbench from '~/components/GraphWorkbench.vue'
 import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'
 
+const route = useRoute()
 const { repositories, chosen, error, fetchRepositories } = useRepositories()
 
 /* Only the code source. Knowledge is a list on a machine: nothing serves the
  * relationships between one record and another, so there is no graph of it to
  * draw yet. */
-onMounted(fetchRepositories)
+onMounted(async () => {
+  await fetchRepositories()
+  // Arriving from a search, which named both.
+  const named = String(route.query.repository ?? '')
+  if (named && repositories.value.some((one) => one.name === named)) chosen.value = named
+})
 </script>
 
 <template>
@@ -37,6 +44,7 @@ onMounted(fetchRepositories)
       v-else
       :key="chosen"
       :repository="chosen"
+      :find="String(route.query.q ?? '')"
       :sources="['code']"
       :controls="['filter', 'kinds', 'parts', 'layouts', 'depth']"
       height="calc(100vh - 15rem)"

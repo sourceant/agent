@@ -25,6 +25,8 @@ const props = withDefaults(defineProps<{
   sources?: Source[]
   controls?: Control[]
   height?: string
+  /** What to narrow to when it opens, for arriving from a search. */
+  find?: string
 }>(), {
   sources: () => ['knowledge', 'code'],
   controls: () => ['filter', 'kinds', 'parts', 'layouts', 'depth', 'retired'],
@@ -64,7 +66,7 @@ function offers(control: Control) {
 const focus = ref('')
 const depth = ref(2)
 const kinds = ref<string[]>([])
-const term = ref('')
+const term = ref(props.find ?? '')
 const mode = ref<Mode>('2d')
 const hiddenParts = ref<number[]>([])
 const retired = ref(false)

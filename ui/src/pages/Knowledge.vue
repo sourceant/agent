@@ -15,6 +15,7 @@ import {
   Textarea,
 } from '@sourceant/design'
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   Boxes,
   Check,
@@ -43,8 +44,10 @@ async function narrowTo(name) {
   if (!name) return
   chosen.value = name
 }
+const route = useRoute()
 const items = ref([])
-const term = ref('')
+// Narrowed on arrival where somebody searched their way here.
+const term = ref(String(route.query.find ?? ''))
 
 const shown = computed(() => {
   const wanted = term.value.trim().toLowerCase()

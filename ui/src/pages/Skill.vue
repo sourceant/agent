@@ -12,6 +12,7 @@ import {
   Select,
   Tabs,
   Textarea,
+  ToggleList,
 } from '@sourceant/design'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -53,7 +54,17 @@ const id = computed(() => String(route.params.id ?? ''))
 const fresh = computed(() => id.value === NEW)
 
 const skill = ref(null)
-const draft = ref({ id: '', name: '', description: '', body: '', paths: [], reviews: null })
+const draft = ref({
+  id: '',
+  name: '',
+  description: '',
+  body: '',
+  paths: [],
+  // What it is for: a purpose, and whether it applies to it. What it is read
+  // as is a separate question, answered by type.
+  applications: {},
+  type: 'guidance',
+})
 // Either GLOBAL, or the name of the repository it is for. One value, so
 // there is no second place for the destination to come from.
 const belongsTo = ref(GLOBAL)
@@ -68,19 +79,13 @@ const panes = [
   { id: 'preview', label: 'Preview' },
 ]
 
-// Kept in the skill's own frontmatter, in the map the format sets aside for
-// whatever a client wants to record, so a skill carrying it stays portable.
-const choices = [
-  { id: null, label: 'Auto' },
-  { id: true, label: 'Always' },
-  { id: false, label: 'Never' },
+// Both kept in the skill's own file, in the fields the format sets aside for
+// them, so a skill carrying either stays portable.
+const kinds = [
+  { id: 'guidance', label: 'Prose the reviewer is told' },
+  { id: 'review-pass', label: 'A review pass of its own' },
+  { id: 'initialization-pass', label: 'A reading of the repository' },
 ]
-
-const saying = computed(() => {
-  if (draft.value.reviews === true) return 'Read against every change here.'
-  if (draft.value.reviews === false) return 'Left out of reviews entirely.'
-  return 'Picked when its wording or its files match the change.'
-})
 
 const savedInto = computed(() =>
   forEverything.value
@@ -108,7 +113,8 @@ const changed = computed(() => {
     draft.value.description !== skill.value.description ||
     draft.value.body !== (skill.value.body ?? '') ||
     draft.value.paths.join('\n') !== (skill.value.paths ?? []).join('\n') ||
-    draft.value.reviews !== skill.value.reviews
+    draft.value.type !== (skill.value.type ?? 'guidance') ||
+    JSON.stringify(draft.value.applications) !== JSON.stringify(skill.value.applications ?? {})
   )
 })
 
@@ -119,7 +125,15 @@ async function load() {
   problem.value = ''
   if (fresh.value) {
     skill.value = null
-    draft.value = { id: '', name: '', description: '', body: '', paths: [], reviews: null }
+    draft.value = {
+      id: '',
+      name: '',
+      description: '',
+      body: '',
+      paths: [],
+      applications: {},
+      type: 'guidance',
+    }
     // What the list was showing, so writing one for the project being
     // looked at takes no thought, and is still named on the screen.
     belongsTo.value = route.query.for || chosen.value || GLOBAL
@@ -137,7 +151,8 @@ async function load() {
       description: found.description,
       body: found.body ?? '',
       paths: [...(found.paths ?? [])],
-      reviews: found.reviews,
+      applications: { ...(found.applications ?? {}) },
+      type: found.type ?? 'guidance',
     }
   } catch (caught) {
     problem.value = caught.message
@@ -159,7 +174,8 @@ async function save() {
       description: draft.value.description,
       body: draft.value.body,
       paths: draft.value.paths,
-      reviews: draft.value.reviews,
+      applications: draft.value.applications,
+      type: draft.value.type,
     })
     saved.value = true
     if (fresh.value || written.id !== id.value) {
@@ -305,19 +321,21 @@ onMounted(async () => {
           />
         </Field>
 
-        <Field label="Use in reviews" hint="Not everything you teach an agent is about judging a change.">
-          <div class="flex flex-wrap gap-1.5">
-            <UiButton
-              v-for="one in choices"
-              :key="String(one.id)"
-              size="sm"
-              :variant="draft.reviews === one.id ? 'default' : 'outline'"
-              @click="draft.reviews = one.id"
-            >
-              {{ one.label }}
-            </UiButton>
-          </div>
-          <p class="mt-2 text-xs text-muted-foreground">{{ saying }}</p>
+        <Field
+          label="What it is for"
+          hint="review is the purpose this product reads. Any other name is there for an agent to ask by."
+        >
+          <ToggleList v-model="draft.applications" :suggestions="['review']" noun="a purpose" />
+          <p class="mt-2 text-xs text-muted-foreground">
+            A purpose nobody names is decided by the change: picked when its wording or its files
+            match what changed.
+          </p>
+        </Field>
+
+        <Field label="Read as" hint="What it is for and how it is read are different questions.">
+          <Select v-model="draft.type" class="w-full">
+            <option v-for="one in kinds" :key="one.id" :value="one.id">{{ one.label }}</option>
+          </Select>
         </Field>
       </UiCard>
 

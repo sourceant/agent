@@ -4,11 +4,12 @@ import {
   Button as UiButton,
   Card as UiCard,
   Input,
-  ItemCard,
   Notice,
   PageHead,
   Select,
+  Table,
   Tabs,
+  ToggleList,
 } from '@sourceant/design'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -27,18 +28,36 @@ import { api } from '~/api'
  * The rest is in somebody's head. That gets written here, into the repository
  * it is about so the team gets it by pulling, or onto this machine for what
  * somebody wants everywhere.
+ *
+ * A column rather than a card each: the question asked of sixty of them is
+ * which ones a review reads, and that is one glance down a column.
  */
 
 const REPOSITORY = 'repository'
 const GLOBAL = 'global'
 const OURS = [REPOSITORY, GLOBAL]
 
-/* Whether a skill is read against a change is two questions. Its author
- * answered one of them in the file; the other belongs to whoever runs this
- * machine, and is the only answer available for the folders a coding agent
- * syncs, which nothing here may edit. */
+/* What a skill is for is one question with one answer: the purposes it applies
+ * to. The file says it, and a skill that belongs to a coding agent cannot be
+ * edited, so for the purpose this product reads the answer is kept here as well
+ * and outranks the file. */
+const REVIEW = 'review'
 const NEVER = 'skills.never_in_reviews'
 const ALWAYS = 'skills.always_in_reviews'
+
+const KINDS = {
+  guidance: 'guidance',
+  'review-pass': 'review pass',
+  'initialization-pass': 'initialization pass',
+}
+
+const columns = [
+  { id: 'skill', label: 'Skill' },
+  { id: 'applies', label: 'Applies to', width: '20rem' },
+  { id: 'kind', label: 'Read as', narrow: true },
+  { id: 'kept', label: 'Kept', narrow: true },
+  { id: 'actions', label: '', align: 'right', width: '3rem' },
+]
 
 const router = useRouter()
 const { repositories, chosen, error, fetchRepositories } = useRepositories()
@@ -47,12 +66,6 @@ const term = ref('')
 const where = ref('all')
 const lists = ref({ [NEVER]: [], [ALWAYS]: [] })
 const onlyRead = ref(false)
-
-const answers = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'always', label: 'Always' },
-  { id: 'never', label: 'Never' },
-]
 
 const wheres = [
   { id: 'all', label: 'All' },
@@ -82,53 +95,81 @@ const lines = (value) =>
     .map((one) => one.trim())
     .filter(Boolean)
 
-// What this machine said, which outranks the author.
-function decided(skill) {
-  if (lists.value[NEVER].includes(skill.id)) return 'never'
-  if (lists.value[ALWAYS].includes(skill.id)) return 'always'
-  return 'auto'
-}
+const ours = (skill) => OURS.includes(skill.origin)
+const home = (skill) =>
+  skill.origin === GLOBAL ? 'everywhere' : skill.origin === REPOSITORY ? chosen.value : skill.origin
 
-// What the author said, worth showing only where nobody here has answered.
-function author(skill) {
-  if (decided(skill) !== 'auto') return ''
-  if (skill.reviews === true) return 'its author says always'
-  if (skill.reviews === false) return 'its author says never'
-  if (!skill.automatic) return 'only when you invoke it'
-  return ''
+// What the skill is for, with what this machine said about reviews on top of
+// what its file says.
+function applies(skill) {
+  const said = { ...(skill.applications ?? {}) }
+  if (lists.value[NEVER].includes(skill.id)) said[REVIEW] = false
+  else if (lists.value[ALWAYS].includes(skill.id)) said[REVIEW] = true
+  else if (!(REVIEW in said) && skill.reviews !== null) said[REVIEW] = skill.reviews
+  return said
 }
 
 // Whether a review would read it at all, which is what the filter narrows to.
 function read(skill) {
-  const mine = decided(skill)
-  if (mine !== 'auto') return mine === 'always'
-  if (skill.reviews === false) return false
-  return skill.automatic || skill.reviews === true
+  const said = applies(skill)[REVIEW]
+  if (said === false) return false
+  if (said === true) return true
+  return skill.automatic
 }
 
-async function decide(skill, choice) {
-  const next = {
-    [NEVER]: lists.value[NEVER].filter((id) => id !== skill.id),
-    [ALWAYS]: lists.value[ALWAYS].filter((id) => id !== skill.id),
+async function decide(skill, said) {
+  const was = applies(skill)
+  const purposes = new Set([...Object.keys(was), ...Object.keys(said)])
+  const changed = [...purposes].filter((purpose) => was[purpose] !== said[purpose])
+  if (!changed.length) return
+
+  if (!ours(skill) && changed.some((purpose) => purpose !== REVIEW)) {
+    error.value = `${skill.name} belongs to ${skill.origin}. Save your own copy to change what it is for.`
+    return
   }
-  if (choice === 'never') next[NEVER].push(skill.id)
-  if (choice === 'always') next[ALWAYS].push(skill.id)
   try {
-    for (const key of [NEVER, ALWAYS]) {
-      if (next[key].join('\n') !== lists.value[key].join('\n')) {
-        await api.setSetting(key, next[key].join('\n'))
-      }
-    }
-    lists.value = next
+    if (ours(skill)) await state(skill, said)
+    else await override(skill, said[REVIEW])
     error.value = ''
   } catch (caught) {
     error.value = caught.message
   }
+  await load()
 }
 
-const ours = (skill) => OURS.includes(skill.origin)
-const home = (skill) =>
-  skill.origin === GLOBAL ? 'everywhere' : skill.origin === REPOSITORY ? chosen.value : skill.origin
+// One of ours: what it is for belongs in its own file, so it travels with it.
+async function state(skill, said) {
+  const full = await api.skill(skill.id, skill.origin === REPOSITORY ? chosen.value : '')
+  await api.recordSkill({
+    scope: skill.origin,
+    repository: skill.origin === REPOSITORY ? chosen.value : '',
+    id: full.id,
+    name: full.name,
+    description: full.description,
+    body: full.body ?? '',
+    paths: full.paths ?? [],
+    type: full.type ?? '',
+    applications: said,
+  })
+  // A file that now says it for itself needs nothing said here.
+  await override(skill, undefined)
+}
+
+// Somebody else's file: the answer for reviews is kept on this machine instead.
+async function override(skill, said) {
+  const next = {
+    [NEVER]: lists.value[NEVER].filter((id) => id !== skill.id),
+    [ALWAYS]: lists.value[ALWAYS].filter((id) => id !== skill.id),
+  }
+  if (said === false) next[NEVER].push(skill.id)
+  if (said === true) next[ALWAYS].push(skill.id)
+  for (const key of [NEVER, ALWAYS]) {
+    if (next[key].join('\n') !== lists.value[key].join('\n')) {
+      await api.setSetting(key, next[key].join('\n'))
+    }
+  }
+  lists.value = next
+}
 
 async function load() {
   try {
@@ -206,52 +247,52 @@ onMounted(async () => {
         </label>
       </div>
       <p class="mb-4 text-xs text-muted-foreground">
-        Auto picks a skill when its wording or its files match the change. At most five are read
-        against one change.
+        A purpose nobody said is decided by the change: a skill is picked when its wording or its
+        files match what changed, and at most five are read against one change.
       </p>
 
-      <div v-if="shown.length" class="space-y-3">
-        <ItemCard
-          v-for="skill in shown"
-          :key="skill.id"
-          :title="skill.name"
-          :subtitle="skill.path"
-          pillar="review"
-          hover
-          class="cursor-pointer"
-          @click="router.push(`/skills/${skill.id}`)"
-        >
-          <template #icon><ScrollText class="h-5 w-5" /></template>
-          <template #badges>
-            <UiBadge :variant="ours(skill) ? 'success' : 'outline'">{{ home(skill) }}</UiBadge>
-          </template>
-          <p class="text-sm text-muted-foreground">{{ skill.description }}</p>
-          <template #meta>
-            <span @click.stop>
-              <Tabs
-                :model-value="decided(skill)"
-                :tabs="answers"
-                size="sm"
-                :label="`Whether ${skill.name} is read against a change`"
-                @update:model-value="decide(skill, $event)"
-              />
-            </span>
-            <span v-if="author(skill)">{{ author(skill) }}</span>
-            <span v-if="skill.paths?.length" class="font-mono">{{ skill.paths.join(' ') }}</span>
-          </template>
-          <template #actions>
-            <UiButton
-              v-if="ours(skill)"
-              variant="ghost"
-              size="icon"
-              :aria-label="`Forget ${skill.name}`"
-              @click.stop="forget(skill)"
-            >
-              <Trash2 class="h-4 w-4" />
-            </UiButton>
-          </template>
-        </ItemCard>
-      </div>
+      <Table v-if="shown.length" :columns="columns" :rows="shown" row-key="id" label="Skills">
+        <template #skill="{ row }">
+          <button
+            type="button"
+            class="block max-w-xl text-left"
+            @click="router.push(`/skills/${row.id}`)"
+          >
+            <span class="block font-medium">{{ row.name }}</span>
+            <span class="block truncate text-xs text-muted-foreground">{{ row.description }}</span>
+          </button>
+        </template>
+
+        <template #applies="{ row }">
+          <ToggleList
+            :model-value="applies(row)"
+            :suggestions="['review']"
+            :addable="false"
+            :refusal="ours(row) ? '' : `Only reviews can be answered for ${row.origin}'s own file.`"
+            @update:model-value="decide(row, $event)"
+          />
+        </template>
+
+        <template #kind="{ row }">
+          <span class="text-xs text-muted-foreground">{{ KINDS[row.type] ?? row.type }}</span>
+        </template>
+
+        <template #kept="{ row }">
+          <UiBadge :variant="ours(row) ? 'success' : 'outline'">{{ home(row) }}</UiBadge>
+        </template>
+
+        <template #actions="{ row }">
+          <UiButton
+            v-if="ours(row)"
+            variant="ghost"
+            size="icon"
+            :aria-label="`Forget ${row.name}`"
+            @click="forget(row)"
+          >
+            <Trash2 class="h-4 w-4" />
+          </UiButton>
+        </template>
+      </Table>
 
       <UiCard v-else class="p-10 text-center">
         <ScrollText class="mx-auto mb-3 h-8 w-8 text-muted-foreground" />

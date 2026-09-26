@@ -66,7 +66,13 @@ export const api = {
   recordSkill: (skill) =>
     call('/api/skills', {
       method: 'PUT',
-      body: JSON.stringify({ scope: 'repository', paths: [], reviews: null, ...skill }),
+      body: JSON.stringify({
+        scope: 'repository',
+        paths: [],
+        applications: {},
+        type: '',
+        ...skill,
+      }),
     }),
   forgetSkill: (repository, scope, id) =>
     call(`/api/skills?${query({ repository, scope, id })}`, { method: 'DELETE' }),
