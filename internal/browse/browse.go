@@ -80,3 +80,86 @@ func isRepository(path string) bool {
 	info, err := os.Stat(filepath.Join(path, ".git"))
 	return err == nil && (info.IsDir() || info.Mode().IsRegular())
 }
+
+// How far down the walk goes, and how much it answers with. A person typing a
+// name wants the folder, not every folder: the walk stops rather than reading a
+// whole disk.
+const (
+	Depth   = 6
+	Results = 40
+)
+
+// skipped names a directory whose contents nobody is looking for. Dependencies
+// and build output hold more directories than the rest of a machine together.
+var skipped = map[string]bool{
+	"node_modules": true,
+	"vendor":       true,
+	"__pycache__":  true,
+	"target":       true,
+	"dist":         true,
+	"build":        true,
+	".venv":        true,
+	"venv":         true,
+}
+
+// Find looks for directories whose name contains term, starting at home.
+//
+// Typing the name is how somebody finds a folder they already know; walking
+// down to it one click at a time is how they find it when they do not. Working
+// trees come first, then the shallower paths, because a repository is what this
+// is nearly always for.
+func Find(term string) ([]Entry, error) {
+	term = strings.ToLower(strings.TrimSpace(term))
+	if term == "" {
+		return nil, nil
+	}
+
+	root := Home()
+	found := make([]Entry, 0, Results)
+	walk := func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			// A directory this user cannot read is not a reason to stop.
+			return nil
+		}
+		if !entry.IsDir() {
+			return nil
+		}
+		name := entry.Name()
+		if path != root && (strings.HasPrefix(name, ".") || skipped[name]) {
+			return filepath.SkipDir
+		}
+		if depthOf(root, path) > Depth {
+			return filepath.SkipDir
+		}
+		if path != root && strings.Contains(strings.ToLower(name), term) {
+			found = append(found, Entry{Name: name, Path: path, Repository: isRepository(path)})
+			if len(found) >= Results {
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	}
+	if err := filepath.WalkDir(root, walk); err != nil {
+		return nil, err
+	}
+
+	sort.SliceStable(found, func(i, j int) bool {
+		if found[i].Repository != found[j].Repository {
+			return found[i].Repository
+		}
+		left, right := depthOf(root, found[i].Path), depthOf(root, found[j].Path)
+		if left != right {
+			return left < right
+		}
+		return found[i].Path < found[j].Path
+	})
+	return found, nil
+}
+
+func depthOf(root, path string) int {
+	relative, err := filepath.Rel(root, path)
+	if err != nil {
+		return 0
+	}
+	return len(strings.Split(relative, string(filepath.Separator)))
+}
