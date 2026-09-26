@@ -1,15 +1,8 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { Check, Loader2, RotateCcw } from 'lucide-vue-next'
-import {
-  Badge as UiBadge,
-  Button as UiButton,
-  Field,
-  Input,
-  ListInput,
-  Notice,
-  Select,
-} from '@sourceant/design'
+import { Check, ChevronDown, ChevronRight, Loader2 } from 'lucide-vue-next'
+import { Button as UiButton, Notice } from '@sourceant/design'
+import SettingField from '~/components/SettingField.vue'
 import { api } from '~/api'
 
 /* One group of settings, drawn from what the core says it has.
@@ -37,6 +30,11 @@ const problem = ref('')
 const saved = ref(false)
 
 const mine = computed(() => settings.value.filter((s) => s.group === props.group))
+// Tuning is kept behind a line somebody has to open, because a screen of
+// twenty fields asks twenty questions and most of them have an answer already.
+const plain = computed(() => mine.value.filter((s) => !s.advanced))
+const tuning = computed(() => mine.value.filter((s) => s.advanced))
+const opened = ref(false)
 
 function shown(setting) {
   // A credential is never read back, so there is nothing to put in the box.
@@ -110,10 +108,6 @@ async function reset(setting) {
   }
 }
 
-function touched(setting) {
-  return setting.secret ? setting.is_set : String(setting.value ?? '') !== String(setting.default ?? '')
-}
-
 watch(() => props.group, load)
 onMounted(load)
 </script>
@@ -126,64 +120,33 @@ onMounted(load)
     </p>
 
     <template v-else>
-      <Field
-        v-for="setting in mine"
+      <SettingField
+        v-for="setting in plain"
         :key="setting.key"
-        :label="setting.label"
-        :for="setting.key"
-        :hint="setting.description"
-      >
-        <template #label>
-          <UiBadge v-if="setting.secret && setting.is_set" variant="success">set</UiBadge>
-          <button
-            v-if="touched(setting)"
-            type="button"
-            class="inline-flex items-center gap-1 text-[11px] font-normal normal-case tracking-normal text-muted-foreground hover:text-foreground"
-            @click="reset(setting)"
-          >
-            <RotateCcw class="h-3 w-3" />
-            put back
-          </button>
-        </template>
+        v-model="draft[setting.key]"
+        :setting="setting"
+        @reset="reset"
+      />
 
-        <Select
-          v-if="setting.choices?.length"
-          :id="setting.key"
-          v-model="draft[setting.key]"
-          class="w-full"
+      <div v-if="tuning.length" class="space-y-4 border-t pt-4">
+        <button
+          type="button"
+          class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          @click="opened = !opened"
         >
-          <option v-for="choice in setting.choices" :key="choice" :value="choice">{{ choice }}</option>
-        </Select>
-
-        <label v-else-if="setting.type === 'bool'" class="flex items-center gap-2 text-sm">
-          <input
-            :id="setting.key"
-            v-model="draft[setting.key]"
-            type="checkbox"
-            class="h-3.5 w-3.5 rounded border"
-          >
-          <span class="text-muted-foreground">{{ draft[setting.key] ? 'On' : 'Off' }}</span>
-        </label>
-
-        <ListInput
-          v-else-if="setting.listed"
+          <ChevronDown v-if="opened" class="h-3.5 w-3.5" />
+          <ChevronRight v-else class="h-3.5 w-3.5" />
+          Tuning ({{ tuning.length }})
+        </button>
+        <SettingField
+          v-for="setting in tuning"
+          v-show="opened"
+          :key="setting.key"
           v-model="draft[setting.key]"
-          mono
-          noun="a folder"
-          placeholder="/home/you/work/knowledgebase/skills"
+          :setting="setting"
+          @reset="reset"
         />
-
-        <Input
-          v-else
-          :id="setting.key"
-          v-model="draft[setting.key]"
-          :type="setting.secret ? 'password' : setting.type === 'int' || setting.type === 'float' ? 'number' : 'text'"
-          :autocomplete="setting.secret ? 'off' : undefined"
-          :placeholder="setting.secret && setting.is_set
-            ? 'Leave empty to keep what is set'
-            : String(setting.default ?? '')"
-        />
-      </Field>
+      </div>
 
       <p v-if="!mine.length" class="py-6 text-sm text-muted-foreground">
         Nothing in this group is configurable here.

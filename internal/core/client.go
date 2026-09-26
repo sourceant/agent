@@ -580,8 +580,11 @@ type Setting struct {
 	Secret      bool     `json:"secret"`
 	// Listed is several of something rather than one thing, kept one to a
 	// line, so a screen draws it as a list rather than as a box of text.
-	Listed bool  `json:"listed"`
-	IsSet  *bool `json:"is_set"`
+	Listed bool `json:"listed"`
+	// Advanced is tuning rather than a choice, kept out of the way of the
+	// settings somebody actually has to answer.
+	Advanced bool  `json:"advanced"`
+	IsSet    *bool `json:"is_set"`
 }
 
 // Settings is everything configurable on this machine.
