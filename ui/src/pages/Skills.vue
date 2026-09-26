@@ -33,11 +33,20 @@ const REPOSITORY = 'repository'
 const GLOBAL = 'global'
 const OURS = [REPOSITORY, GLOBAL]
 
+/* Whether a skill is read against a change is two questions. Its author
+ * answered one of them in the file; the other belongs to whoever runs this
+ * machine, and is the only answer available for the folders a coding agent
+ * syncs, which nothing here may edit. */
+const NEVER = 'skills.never_in_reviews'
+const ALWAYS = 'skills.always_in_reviews'
+
 const router = useRouter()
 const { repositories, chosen, error, fetchRepositories } = useRepositories()
 const skills = ref([])
 const term = ref('')
 const where = ref('all')
+const lists = ref({ [NEVER]: [], [ALWAYS]: [] })
+const onlyRead = ref(false)
 
 const wheres = [
   { id: 'all', label: 'All' },
@@ -52,6 +61,7 @@ const shown = computed(() => {
     if (where.value === REPOSITORY && skill.origin !== REPOSITORY) return false
     if (where.value === GLOBAL && skill.origin !== GLOBAL) return false
     if (where.value === 'agents' && OURS.includes(skill.origin)) return false
+    if (onlyRead.value && !read(skill)) return false
     if (!wanted) return true
     return (
       skill.name.toLowerCase().includes(wanted) ||
@@ -60,14 +70,68 @@ const shown = computed(() => {
   })
 })
 
+const lines = (value) =>
+  String(value ?? '')
+    .split('\n')
+    .map((one) => one.trim())
+    .filter(Boolean)
+
+// What this machine said, which outranks the author.
+function decided(skill) {
+  if (lists.value[NEVER].includes(skill.id)) return 'never'
+  if (lists.value[ALWAYS].includes(skill.id)) return 'always'
+  return 'relevant'
+}
+
+// What the author said, worth showing only where nobody here has answered.
+function author(skill) {
+  if (decided(skill) !== 'relevant') return ''
+  if (skill.reviews === true) return 'its author says always'
+  if (skill.reviews === false) return 'its author says never'
+  if (!skill.automatic) return 'only when you invoke it'
+  return ''
+}
+
+// Whether a review would read it at all, which is what the filter narrows to.
+function read(skill) {
+  const mine = decided(skill)
+  if (mine !== 'relevant') return mine === 'always'
+  if (skill.reviews === false) return false
+  return skill.automatic || skill.reviews === true
+}
+
+async function decide(skill, choice) {
+  const next = {
+    [NEVER]: lists.value[NEVER].filter((id) => id !== skill.id),
+    [ALWAYS]: lists.value[ALWAYS].filter((id) => id !== skill.id),
+  }
+  if (choice === 'never') next[NEVER].push(skill.id)
+  if (choice === 'always') next[ALWAYS].push(skill.id)
+  try {
+    for (const key of [NEVER, ALWAYS]) {
+      if (next[key].join('\n') !== lists.value[key].join('\n')) {
+        await api.setSetting(key, next[key].join('\n'))
+      }
+    }
+    lists.value = next
+    error.value = ''
+  } catch (caught) {
+    error.value = caught.message
+  }
+}
+
 const ours = (skill) => OURS.includes(skill.origin)
 const home = (skill) =>
   skill.origin === GLOBAL ? 'everywhere' : skill.origin === REPOSITORY ? chosen.value : skill.origin
 
 async function load() {
   try {
-    const page = await api.skills(chosen.value)
+    const [page, settings] = await Promise.all([api.skills(chosen.value), api.settings()])
     skills.value = page.skills
+    lists.value = {
+      [NEVER]: lines(settings.find((one) => one.key === NEVER)?.value),
+      [ALWAYS]: lines(settings.find((one) => one.key === ALWAYS)?.value),
+    }
     error.value = ''
   } catch (caught) {
     skills.value = []
@@ -128,7 +192,17 @@ onMounted(async () => {
     <EmptyMachine v-if="repositories.length === 0" />
 
     <template v-else>
-      <Tabs v-model="where" :tabs="wheres" label="Where they are kept" class="mb-4" />
+      <div class="mb-2 flex flex-wrap items-center justify-between gap-3">
+        <Tabs v-model="where" :tabs="wheres" label="Where they are kept" />
+        <label class="flex items-center gap-2 text-sm text-muted-foreground">
+          <input v-model="onlyRead" type="checkbox" class="h-3.5 w-3.5 rounded border">
+          Only what a review reads
+        </label>
+      </div>
+      <p class="mb-4 text-xs text-muted-foreground">
+        At most five skills are read against one change. Anything set to always counts towards
+        those five.
+      </p>
 
       <div v-if="shown.length" class="space-y-3">
         <ItemCard
@@ -147,9 +221,18 @@ onMounted(async () => {
           </template>
           <p class="text-sm text-muted-foreground">{{ skill.description }}</p>
           <template #meta>
-            <span v-if="skill.reviews === true" class="text-success">always in reviews</span>
-            <span v-else-if="skill.reviews === false">not used in reviews</span>
-            <span v-else-if="!skill.automatic">only when you invoke it</span>
+            <Select
+              :model-value="decided(skill)"
+              size="sm"
+              :aria-label="`When ${skill.name} is read against a change`"
+              @click.stop
+              @change="decide(skill, $event.target.value)"
+            >
+              <option value="relevant">When it looks relevant</option>
+              <option value="always">Always in reviews</option>
+              <option value="never">Never in reviews</option>
+            </Select>
+            <span v-if="author(skill)">{{ author(skill) }}</span>
             <span v-if="skill.paths?.length" class="font-mono">{{ skill.paths.join(' ') }}</span>
           </template>
           <template #actions>
