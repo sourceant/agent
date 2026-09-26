@@ -189,3 +189,30 @@ func TestAKeyIsCheckedAgainstTheProviderRatherThanGuessedAt(t *testing.T) {
 		t.Errorf("the reason is missing from %s", response.Body.String())
 	}
 }
+
+// A screen that wants a number does not want a graph: the count comes back
+// without the nodes.
+func TestNodesAnswersTheCountWithoutTheWholeScope(t *testing.T) {
+	reader := &stubReader{}
+	server := New(reader, stubSupervisor{}, "dev", "")
+
+	response := call(t, server, "/api/nodes?repository=acme/billing&labels=file&limit=1")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", response.Code)
+	}
+	if reader.askedFor != "acme/billing" || len(reader.askedLabels) != 1 {
+		t.Errorf("asked for %q with %v, want the repository and the label", reader.askedFor, reader.askedLabels)
+	}
+	if !strings.Contains(response.Body.String(), "1204") {
+		t.Errorf("the count is missing from %s", response.Body.String())
+	}
+}
+
+func TestNodesRefusesToGuessWhichRepositoryIsMeant(t *testing.T) {
+	server := New(&stubReader{}, stubSupervisor{}, "dev", "")
+
+	if code := call(t, server, "/api/nodes").Code; code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", code)
+	}
+}

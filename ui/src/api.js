@@ -49,6 +49,11 @@ export const api = {
       node_limit: nodeLimit || '',
     })}`),
 
+  /* A page of nodes, or just the count of them: total comes back whatever the
+   * limit, so a screen wanting a number asks for one node. */
+  nodes: (repository, { labels = [], limit = 1 } = {}) =>
+    call(`/api/nodes?${query({ repository, limit })}${labels.map((one) => `&labels=${encodeURIComponent(one)}`).join('')}`),
+
   knowledge: (repository) => call(`/api/knowledge?${query({ repository, limit: 100 })}`),
   recordKnowledge: (item) =>
     call('/api/knowledge', { method: 'PUT', body: JSON.stringify(item) }),

@@ -26,6 +26,7 @@ type Reader interface {
 	Healthy(ctx context.Context) bool
 	Repositories(ctx context.Context) ([]core.Repository, error)
 	Graph(ctx context.Context, repository string, opts core.GraphOptions) (core.Graph, error)
+	Nodes(ctx context.Context, repository string, opts core.NodeOptions) (core.NodePage, error)
 	Attention(ctx context.Context, repository string) (core.Attention, error)
 	Register(ctx context.Context, path, name string) (core.Repository, error)
 	Forget(ctx context.Context, path string) error
@@ -124,6 +125,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/settings", s.settings)
 	mux.HandleFunc("PUT /api/settings", s.setSetting)
 	mux.HandleFunc("DELETE /api/settings", s.resetSetting)
+	mux.HandleFunc("GET /api/nodes", s.nodes)
 	mux.HandleFunc("GET /api/skills/uses", s.uses)
 	mux.HandleFunc("GET /api/models", s.models)
 	mux.HandleFunc("POST /api/models/check", s.checkModel)
@@ -192,6 +194,32 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, http.StatusOK, graph)
+}
+
+// A page of nodes, for a screen that wants a count rather than a drawing.
+func (s *Server) nodes(w http.ResponseWriter, r *http.Request) {
+	repository := r.URL.Query().Get("repository")
+	if repository == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a repository"})
+		return
+	}
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil {
+		limit = 0
+	}
+	page, err := s.reader.Nodes(r.Context(), repository, core.NodeOptions{
+		Labels:   r.URL.Query()["labels"],
+		FilePath: r.URL.Query().Get("file_path"),
+		Limit:    limit,
+	})
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if page.Nodes == nil {
+		page.Nodes = []core.Node{}
+	}
+	write(w, http.StatusOK, page)
 }
 
 func (s *Server) attention(w http.ResponseWriter, r *http.Request) {

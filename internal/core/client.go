@@ -193,6 +193,43 @@ func (c *Client) Graph(ctx context.Context, repository string, opts GraphOptions
 	return get[Graph](ctx, c, "/api/code/graph", query)
 }
 
+// NodePage is a page of nodes, and how many there are in all.
+//
+// The count is the point for anything that only wants the number: a whole scope
+// is thousands of nodes and nobody needs them to know there are 1,204 files.
+type NodePage struct {
+	Nodes   []Node `json:"nodes"`
+	Total   int    `json:"total"`
+	HasMore bool   `json:"has_more"`
+}
+
+// NodeOptions narrows a page of nodes to what the index can narrow on without
+// reading the whole scope.
+type NodeOptions struct {
+	Labels   []string
+	FilePath string
+	Limit    int
+	Offset   int
+}
+
+// Nodes is a page of one repository's nodes, filtered by label or by file.
+func (c *Client) Nodes(ctx context.Context, repository string, opts NodeOptions) (NodePage, error) {
+	query := url.Values{"repository": {repository}}
+	for _, label := range opts.Labels {
+		query.Add("labels", label)
+	}
+	if opts.FilePath != "" {
+		query.Set("file_path", opts.FilePath)
+	}
+	if opts.Limit > 0 {
+		query.Set("limit", strconv.Itoa(opts.Limit))
+	}
+	if opts.Offset > 0 {
+		query.Set("offset", strconv.Itoa(opts.Offset))
+	}
+	return get[NodePage](ctx, c, "/api/code/nodes", query)
+}
+
 // Worth is one file where recent change has landed on something the rest of
 // the code leans on.
 type Worth struct {

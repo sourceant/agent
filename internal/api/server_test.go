@@ -24,6 +24,7 @@ type stubReader struct {
 	err             error
 	askedFor        string
 	askedOptions    core.GraphOptions
+	askedLabels     []string
 	askedEverything bool
 	askedUpdate     bool
 	askedDryRun     bool
@@ -150,6 +151,12 @@ func (s *stubReader) Reviews(_ context.Context, repository string) ([]core.Readi
 
 func (s *stubReader) Settings(context.Context) ([]core.Setting, error) {
 	return s.settings, s.err
+}
+
+func (s *stubReader) Nodes(_ context.Context, repository string, opts core.NodeOptions) (core.NodePage, error) {
+	s.askedFor = repository
+	s.askedLabels = opts.Labels
+	return core.NodePage{Total: 1204}, s.err
 }
 
 func (s *stubReader) Uses(context.Context) ([]core.Use, error) {
