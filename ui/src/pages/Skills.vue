@@ -222,11 +222,11 @@ onMounted(async () => {
         <Tabs v-model="where" :tabs="wheres" label="Where they are kept" />
         <label class="flex items-center gap-2 text-sm text-muted-foreground">
           <input v-model="onlyRead" type="checkbox" class="h-3.5 w-3.5 rounded border">
-          Only what a review reads
+          Used by code review
         </label>
       </div>
       <p class="mb-4 text-xs text-muted-foreground">
-        Used for everything until a use is turned off. At most five are read against one change.
+        Used for everything unless turned off. A review reads five at most.
       </p>
 
       <Table v-if="shown.length" :columns="columns" :rows="shown" row-key="id" label="Skills">
@@ -286,12 +286,10 @@ onMounted(async () => {
 
       <UiCard v-else class="p-10 text-center">
         <ScrollText class="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-        <p class="font-medium">Nothing written down here yet.</p>
+        <p class="font-medium">No skills here.</p>
         <p class="mx-auto mt-1 max-w-lg text-sm text-muted-foreground">
-          A skill says when it applies and what it says to do. Anything you have already taught
-          Claude or Codex is read from their own folders, and anything your team committed is read
-          from the repository. What you write here is kept beside the index rather than in
-          anybody's checkout.
+          Claude's and Codex's own folders are read, as is anything your team committed. What you
+          write here is kept beside the index, not in a checkout.
         </p>
         <UiButton class="mt-4" variant="glow" @click="router.push({ path: '/skills/new', query: { for: chosen } })">
           <Plus class="mr-2 h-4 w-4" />

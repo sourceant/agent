@@ -59,11 +59,12 @@ const draft = ref({
   description: '',
   body: '',
   paths: [],
-  // Which uses it is kept out of. What it is used for, whether this product may
-  // pick it itself, and how it is read are three separate questions.
+  // Which uses it is kept out of, and whether it may be selected without being
+  // named. Two questions. Its kind is carried as it was written: review-pass
+  // and initialization-pass name an activity, which is what uses already say.
   applications: {},
   automatic: true,
-  type: 'guidance',
+  type: '',
 })
 // Either GLOBAL, or the name of the repository it is for. One value, so
 // there is no second place for the destination to come from.
@@ -92,14 +93,6 @@ function toggle(use) {
   draft.value.applications = applications
 }
 
-// Both kept in the skill's own file, in the fields the format sets aside for
-// them, so a skill carrying either stays portable.
-const kinds = [
-  { id: 'guidance', label: 'Guidance' },
-  { id: 'review-pass', label: 'Review pass' },
-  { id: 'initialization-pass', label: 'Initialization pass' },
-]
-
 const savedInto = computed(() =>
   forEverything.value
     ? 'Kept on this machine and read for every repository you work in.'
@@ -126,7 +119,6 @@ const changed = computed(() => {
     draft.value.description !== skill.value.description ||
     draft.value.body !== (skill.value.body ?? '') ||
     draft.value.paths.join('\n') !== (skill.value.paths ?? []).join('\n') ||
-    draft.value.type !== (skill.value.type ?? 'guidance') ||
     draft.value.automatic !== (skill.value.automatic ?? true) ||
     JSON.stringify(draft.value.applications) !== JSON.stringify(skill.value.applications ?? {})
   )
@@ -148,7 +140,7 @@ async function load() {
       paths: [],
       applications: {},
       automatic: true,
-      type: 'guidance',
+      type: '',
     }
     // What the list was showing, so writing one for the project being
     // looked at takes no thought, and is still named on the screen.
@@ -169,7 +161,7 @@ async function load() {
       paths: [...(found.paths ?? [])],
       applications: { ...(found.applications ?? {}) },
       automatic: found.automatic ?? true,
-      type: found.type ?? 'guidance',
+      type: found.type ?? '',
     }
   } catch (caught) {
     problem.value = caught.message
@@ -269,21 +261,19 @@ onMounted(async () => {
     </PageHead>
 
     <Notice v-if="copying" tone="info" class="mb-4">
-      This one is not ours to change: it belongs to your coding agent, or your team committed
-      it to the repository. Saving keeps a copy of our own, for whatever you choose below, and
-      the copy is then the one that gets used.
+      Read-only file. Save keeps your own copy, which is then the one used.
     </Notice>
 
     <Notice v-if="problem" tone="danger" class="mb-4">
       {{ problem }}
     </Notice>
 
-    <p v-if="loading" class="py-10 text-center text-sm text-muted-foreground">Reading it.</p>
+    <p v-if="loading" class="py-10 text-center text-sm text-muted-foreground">Loading.</p>
 
     <template v-else>
       <UiCard class="mb-3 p-5">
         <div class="grid gap-4 lg:grid-cols-3">
-          <Field label="Name" for="skill-id" hint="Lower case words joined by hyphens.">
+          <Field label="Name" for="skill-id" hint="Lowercase, hyphenated.">
             <Input
               id="skill-id"
               v-model="draft.id"
@@ -295,7 +285,7 @@ onMounted(async () => {
             class="lg:col-span-2"
             label="Description"
             for="skill-description"
-            hint="Matched against a change when SourceAnt picks skills itself."
+            hint="Matched against a change during automatic selection."
           >
             <Input
               id="skill-description"
@@ -304,7 +294,7 @@ onMounted(async () => {
             />
           </Field>
         </div>
-        <Field class="mt-4" label="Files" for="skill-paths" hint="Globs, one a line. Named, only these count.">
+        <Field class="mt-4" label="Files" for="skill-paths" hint="Globs, one a line. Limits selection to these.">
           <ListInput
             v-model="draft.paths"
             mono
@@ -336,28 +326,24 @@ onMounted(async () => {
                 {{ use.label }}
               </button>
             </div>
-            <label class="mt-3 flex items-center gap-2 text-sm">
+            <label class="mt-4 flex items-center gap-2 text-sm">
               <input v-model="draft.automatic" type="checkbox" class="h-3.5 w-3.5 rounded border">
-              SourceAnt may pick it itself
+              Allow automatic selection
             </label>
+            <p class="mt-1 text-xs text-muted-foreground">
+              Off: read only when something names it.
+            </p>
           </Field>
-          <div class="grid gap-4">
-            <Field label="Read as">
-              <Select v-model="draft.type" class="w-full">
-                <option v-for="one in kinds" :key="one.id" :value="one.id">{{ one.label }}</option>
-              </Select>
-            </Field>
-            <Field label="Kept for" for="skill-belongs">
-              <Select
-                id="skill-belongs"
-                v-model="belongsTo"
-                :disabled="!!skill && !theirs"
-                class="w-full"
-              >
-                <option v-for="one in belongings" :key="one.id" :value="one.id">{{ one.label }}</option>
-              </Select>
-            </Field>
-          </div>
+          <Field label="Scope" for="skill-belongs">
+            <Select
+              id="skill-belongs"
+              v-model="belongsTo"
+              :disabled="!!skill && !theirs"
+              class="w-full"
+            >
+              <option v-for="one in belongings" :key="one.id" :value="one.id">{{ one.label }}</option>
+            </Select>
+          </Field>
         </div>
       </UiCard>
 
