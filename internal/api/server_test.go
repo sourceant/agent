@@ -152,6 +152,10 @@ func (s *stubReader) Settings(context.Context) ([]core.Setting, error) {
 	return s.settings, s.err
 }
 
+func (s *stubReader) Uses(context.Context) ([]core.Use, error) {
+	return []core.Use{{ID: "review", Label: "Code review"}}, s.err
+}
+
 func (s *stubReader) Models(context.Context) ([]core.Offering, error) {
 	return s.offered, s.err
 }

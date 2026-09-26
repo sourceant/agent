@@ -377,6 +377,18 @@ func (c *Client) Skills(ctx context.Context, repository string) (SkillPage, erro
 	})
 }
 
+// Use is one thing this product does, that a skill can be for.
+type Use struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// Uses is what a skill can be used for, read from the core so every screen
+// offers the same list.
+func (c *Client) Uses(ctx context.Context) ([]Use, error) {
+	return get[[]Use](ctx, c, "/api/skills/uses", nil)
+}
+
 // Skill is one rule in full, so a person can read what a check was made against.
 func (c *Client) Skill(ctx context.Context, id, repository string) (Skill, error) {
 	return get[Skill](ctx, c, "/api/skills/"+id, url.Values{"repository": {repository}})
@@ -399,6 +411,9 @@ type Stated struct {
 	// several things, and being read as a pass of its own is not one of them.
 	Applications map[string]bool `json:"applications"`
 	Type         string          `json:"type"`
+	// Automatic is whether this product may pick it without being asked, which
+	// is not one of the uses.
+	Automatic bool `json:"automatic"`
 }
 
 // RecordSkill writes a skill down, in a repository or on this machine.

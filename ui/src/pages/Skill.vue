@@ -59,9 +59,10 @@ const draft = ref({
   description: '',
   body: '',
   paths: [],
-  // What it is for: a purpose, and whether it applies to it. What it is read
-  // as is a separate question, answered by type.
+  // Which uses it is kept out of. What it is used for, whether this product may
+  // pick it itself, and how it is read are three separate questions.
   applications: {},
+  automatic: true,
   type: 'guidance',
 })
 // Either GLOBAL, or the name of the repository it is for. One value, so
@@ -78,36 +79,25 @@ const panes = [
   { id: 'preview', label: 'Preview' },
 ]
 
-const REVIEW = 'review'
+const uses = ref([])
 
-// Reviews is the one use this product acts on, so it is the one offered. Auto
-// is nobody having said, which leaves it to the change.
-const answers = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'always', label: 'Always' },
-  { id: 'never', label: 'Never' },
-]
+// On until said otherwise, so a skill nobody has narrowed is available to
+// everything this product does.
+const on = (use) => draft.value.applications?.[use] !== false
 
-const uses = computed(() => {
-  const said = draft.value.applications?.[REVIEW]
-  if (said === true) return 'always'
-  if (said === false) return 'never'
-  return 'auto'
-})
-
-function useFor(said) {
+function toggle(use) {
   const applications = { ...draft.value.applications }
-  if (said === 'auto') delete applications[REVIEW]
-  else applications[REVIEW] = said === 'always'
+  if (on(use)) applications[use] = false
+  else delete applications[use]
   draft.value.applications = applications
 }
 
 // Both kept in the skill's own file, in the fields the format sets aside for
 // them, so a skill carrying either stays portable.
 const kinds = [
-  { id: 'guidance', label: 'Prose the reviewer is told' },
-  { id: 'review-pass', label: 'A review pass of its own' },
-  { id: 'initialization-pass', label: 'A reading of the repository' },
+  { id: 'guidance', label: 'Guidance' },
+  { id: 'review-pass', label: 'Review pass' },
+  { id: 'initialization-pass', label: 'Initialization pass' },
 ]
 
 const savedInto = computed(() =>
@@ -137,6 +127,7 @@ const changed = computed(() => {
     draft.value.body !== (skill.value.body ?? '') ||
     draft.value.paths.join('\n') !== (skill.value.paths ?? []).join('\n') ||
     draft.value.type !== (skill.value.type ?? 'guidance') ||
+    draft.value.automatic !== (skill.value.automatic ?? true) ||
     JSON.stringify(draft.value.applications) !== JSON.stringify(skill.value.applications ?? {})
   )
 })
@@ -146,6 +137,7 @@ const lines = computed(() => (draft.value.body ? draft.value.body.split('\n').le
 async function load() {
   loading.value = true
   problem.value = ''
+  if (!uses.value.length) uses.value = await api.uses().catch(() => [])
   if (fresh.value) {
     skill.value = null
     draft.value = {
@@ -155,6 +147,7 @@ async function load() {
       body: '',
       paths: [],
       applications: {},
+      automatic: true,
       type: 'guidance',
     }
     // What the list was showing, so writing one for the project being
@@ -175,6 +168,7 @@ async function load() {
       body: found.body ?? '',
       paths: [...(found.paths ?? [])],
       applications: { ...(found.applications ?? {}) },
+      automatic: found.automatic ?? true,
       type: found.type ?? 'guidance',
     }
   } catch (caught) {
@@ -198,6 +192,7 @@ async function save() {
       body: draft.value.body,
       paths: draft.value.paths,
       applications: draft.value.applications,
+      automatic: draft.value.automatic,
       type: draft.value.type,
     })
     saved.value = true
@@ -287,13 +282,8 @@ onMounted(async () => {
 
     <template v-else>
       <UiCard class="mb-3 p-5">
-        <h2 class="mb-4 text-sm font-semibold">What it is</h2>
         <div class="grid gap-4 lg:grid-cols-3">
-          <Field
-            label="Name"
-            for="skill-id"
-            hint="Lower case words joined by hyphens. It names the folder the skill is saved in."
-          >
+          <Field label="Name" for="skill-id" hint="Lower case words joined by hyphens.">
             <Input
               id="skill-id"
               v-model="draft.id"
@@ -303,9 +293,9 @@ onMounted(async () => {
           </Field>
           <Field
             class="lg:col-span-2"
-            label="When it applies"
+            label="Description"
             for="skill-description"
-            hint="One sentence. It decides whether a change gets read against this skill."
+            hint="Matched against a change when SourceAnt picks skills itself."
           >
             <Input
               id="skill-description"
@@ -314,13 +304,7 @@ onMounted(async () => {
             />
           </Field>
         </div>
-        <Field
-          class="mt-4"
-          label="Files it is about"
-          for="skill-paths"
-          hint="Globs, one to a line. Named here, a change is read against this only when it
-                touches one of them, whatever the wording says. Left empty, the wording decides."
-        >
+        <Field class="mt-4" label="Files" for="skill-paths" hint="Globs, one a line. Named, only these count.">
           <ListInput
             v-model="draft.paths"
             mono
@@ -332,41 +316,48 @@ onMounted(async () => {
       </UiCard>
 
       <UiCard class="mb-3 p-5">
-        <h2 class="mb-4 text-sm font-semibold">How it is used</h2>
         <div class="grid gap-4 lg:grid-cols-3">
-          <Field
-            label="Skill uses"
-            hint="Reviews is the one use SourceAnt acts on. Auto leaves it to the change."
-          >
-            <Tabs
-              :model-value="uses"
-              :tabs="answers"
-              size="sm"
-              label="Whether reviews use this skill"
-              @update:model-value="useFor"
-            />
+          <Field class="lg:col-span-2" label="Skill uses">
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="use in uses"
+                :key="use.id"
+                type="button"
+                :aria-pressed="on(use.id)"
+                :class="[
+                  'rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+                  on(use.id)
+                    ? 'border-primary/30 bg-primary/10 text-foreground'
+                    : 'border-border text-muted-foreground line-through',
+                  'hover:border-primary/50',
+                ]"
+                @click="toggle(use.id)"
+              >
+                {{ use.label }}
+              </button>
+            </div>
+            <label class="mt-3 flex items-center gap-2 text-sm">
+              <input v-model="draft.automatic" type="checkbox" class="h-3.5 w-3.5 rounded border">
+              SourceAnt may pick it itself
+            </label>
           </Field>
-          <Field label="Read as" hint="What it is used for and how it is read are different questions.">
-            <Select v-model="draft.type" class="w-full">
-              <option v-for="one in kinds" :key="one.id" :value="one.id">{{ one.label }}</option>
-            </Select>
-          </Field>
-          <Field
-            label="Kept for"
-            for="skill-belongs"
-            :hint="forEverything
-              ? 'Read for every repository you work in.'
-              : 'Read only when reviewing that repository.'"
-          >
-            <Select
-              id="skill-belongs"
-              v-model="belongsTo"
-              :disabled="!!skill && !theirs"
-              class="w-full"
-            >
-              <option v-for="one in belongings" :key="one.id" :value="one.id">{{ one.label }}</option>
-            </Select>
-          </Field>
+          <div class="grid gap-4">
+            <Field label="Read as">
+              <Select v-model="draft.type" class="w-full">
+                <option v-for="one in kinds" :key="one.id" :value="one.id">{{ one.label }}</option>
+              </Select>
+            </Field>
+            <Field label="Kept for" for="skill-belongs">
+              <Select
+                id="skill-belongs"
+                v-model="belongsTo"
+                :disabled="!!skill && !theirs"
+                class="w-full"
+              >
+                <option v-for="one in belongings" :key="one.id" :value="one.id">{{ one.label }}</option>
+              </Select>
+            </Field>
+          </div>
         </div>
       </UiCard>
 

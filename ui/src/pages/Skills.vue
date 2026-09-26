@@ -36,25 +36,16 @@ const REPOSITORY = 'repository'
 const GLOBAL = 'global'
 const OURS = [REPOSITORY, GLOBAL]
 
-/* What a skill is used for is stored on the skill, as a purpose that applies or
- * does not. Reviews is the one this product acts on, so it is the one offered:
- * a box to type any other name in would be a box with nothing behind it.
- *
- * A skill belonging to a coding agent cannot be edited, so the answer for
- * reviews is also kept on this machine, where it outranks the file. */
+/* A skill is used for everything this product does until a use is turned off,
+ * which is stored on the skill itself. A skill belonging to a coding agent
+ * cannot be edited, so for code review the answer is kept on this machine,
+ * where it outranks the file. */
 const REVIEW = 'review'
 const NEVER = 'skills.never_in_reviews'
-const ALWAYS = 'skills.always_in_reviews'
-
-const answers = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'always', label: 'Always' },
-  { id: 'never', label: 'Never' },
-]
 
 const columns = [
   { id: 'skill', label: 'Skill' },
-  { id: 'uses', label: 'Skill uses', width: '14rem' },
+  { id: 'uses', label: 'Skill uses', width: '22rem' },
   { id: 'source', label: 'Source', narrow: true },
   { id: 'actions', label: '', align: 'right', width: '3rem' },
 ]
@@ -64,7 +55,8 @@ const { repositories, chosen, error, fetchRepositories } = useRepositories()
 const skills = ref([])
 const term = ref('')
 const where = ref('all')
-const lists = ref({ [NEVER]: [], [ALWAYS]: [] })
+const off = ref([])
+const uses = ref([])
 const onlyRead = ref(false)
 
 const wheres = [
@@ -99,29 +91,25 @@ const ours = (skill) => OURS.includes(skill.origin)
 const home = (skill) =>
   skill.origin === GLOBAL ? 'everywhere' : skill.origin === REPOSITORY ? chosen.value : skill.origin
 
-// Whether reviews use it: what its file says, with what this machine said on
-// top. Nobody having said is not the same as a no.
-function used(skill) {
-  if (lists.value[NEVER].includes(skill.id)) return 'never'
-  if (lists.value[ALWAYS].includes(skill.id)) return 'always'
-  const said = skill.applications?.[REVIEW] ?? skill.reviews
-  if (said === true) return 'always'
-  if (said === false) return 'never'
-  return 'auto'
+// Whether one use has it. Off is said; anything else is on.
+function on(skill, use) {
+  if (use === REVIEW && off.value.includes(skill.id)) return false
+  return skill.applications?.[use] !== false
 }
 
 // Whether a review would read it at all, which is what the filter narrows to.
-function read(skill) {
-  const said = used(skill)
-  if (said !== 'auto') return said === 'always'
-  return skill.automatic
-}
+const read = (skill) => on(skill, REVIEW)
 
-async function decide(skill, said) {
-  if (said === used(skill)) return
+// A use somebody may answer here: a file that belongs to a coding agent is not
+// ours to change, and code review is the one this machine keeps its own answer
+// for.
+const answerable = (skill, use) => ours(skill) || use === REVIEW
+
+async function toggle(skill, use) {
+  const wanted = !on(skill, use)
   try {
-    if (ours(skill)) await state(skill, said)
-    else await override(skill, said)
+    if (ours(skill)) await state(skill, use, wanted)
+    else await keep(skill, wanted)
     error.value = ''
   } catch (caught) {
     error.value = caught.message
@@ -131,11 +119,11 @@ async function decide(skill, said) {
 
 // One of ours: what it is used for belongs in its own file, so it travels with
 // the skill rather than staying on this machine.
-async function state(skill, said) {
+async function state(skill, use, wanted) {
   const full = await api.skill(skill.id, skill.origin === REPOSITORY ? chosen.value : '')
   const applications = { ...(full.applications ?? {}) }
-  if (said === 'auto') delete applications[REVIEW]
-  else applications[REVIEW] = said === 'always'
+  if (wanted) delete applications[use]
+  else applications[use] = false
   await api.recordSkill({
     scope: skill.origin,
     repository: skill.origin === REPOSITORY ? chosen.value : '',
@@ -145,36 +133,31 @@ async function state(skill, said) {
     body: full.body ?? '',
     paths: full.paths ?? [],
     type: full.type ?? '',
+    automatic: full.automatic ?? true,
     applications,
   })
-  // A file that now says it for itself needs nothing said here.
-  await override(skill, 'auto')
+  if (use === REVIEW) await keep(skill, true)
 }
 
-// Somebody else's file: the answer for reviews is kept on this machine instead.
-async function override(skill, said) {
-  const next = {
-    [NEVER]: lists.value[NEVER].filter((id) => id !== skill.id),
-    [ALWAYS]: lists.value[ALWAYS].filter((id) => id !== skill.id),
-  }
-  if (said === 'never') next[NEVER].push(skill.id)
-  if (said === 'always') next[ALWAYS].push(skill.id)
-  for (const key of [NEVER, ALWAYS]) {
-    if (next[key].join('\n') !== lists.value[key].join('\n')) {
-      await api.setSetting(key, next[key].join('\n'))
-    }
-  }
-  lists.value = next
+// Somebody else's file: kept on this machine instead.
+async function keep(skill, wanted) {
+  const next = wanted
+    ? off.value.filter((id) => id !== skill.id)
+    : [...off.value, skill.id]
+  await api.setSetting(NEVER, next.join('\n'))
+  off.value = next
 }
 
 async function load() {
   try {
-    const [page, settings] = await Promise.all([api.skills(chosen.value), api.settings()])
+    const [page, settings, offered] = await Promise.all([
+      api.skills(chosen.value),
+      api.settings(),
+      uses.value.length ? uses.value : api.uses(),
+    ])
     skills.value = page.skills
-    lists.value = {
-      [NEVER]: lines(settings.find((one) => one.key === NEVER)?.value),
-      [ALWAYS]: lines(settings.find((one) => one.key === ALWAYS)?.value),
-    }
+    off.value = lines(settings.find((one) => one.key === NEVER)?.value)
+    uses.value = offered
     error.value = ''
   } catch (caught) {
     skills.value = []
@@ -243,9 +226,7 @@ onMounted(async () => {
         </label>
       </div>
       <p class="mb-4 text-xs text-muted-foreground">
-        Reviews is the one use SourceAnt acts on. Auto lets the change decide: a skill is picked
-        when its wording or its files match what changed, and at most five are read against one
-        change.
+        Used for everything until a use is turned off. At most five are read against one change.
       </p>
 
       <Table v-if="shown.length" :columns="columns" :rows="shown" row-key="id" label="Skills">
@@ -255,19 +236,35 @@ onMounted(async () => {
             class="block max-w-xl text-left"
             @click="router.push(`/skills/${row.id}`)"
           >
-            <span class="block font-medium">{{ row.name }}</span>
+            <span class="block font-medium">
+              {{ row.name }}
+              <UiBadge v-if="!row.automatic" variant="outline" class="ml-1.5">manual</UiBadge>
+            </span>
             <span class="block truncate text-xs text-muted-foreground">{{ row.description }}</span>
           </button>
         </template>
 
         <template #uses="{ row }">
-          <Tabs
-            :model-value="used(row)"
-            :tabs="answers"
-            size="sm"
-            :label="`Whether reviews use ${row.name}`"
-            @update:model-value="decide(row, $event)"
-          />
+          <div class="flex flex-wrap gap-1">
+            <button
+              v-for="use in uses"
+              :key="use.id"
+              type="button"
+              :disabled="!answerable(row, use.id)"
+              :aria-pressed="on(row, use.id)"
+              :title="`${use.label}: ${on(row, use.id) ? 'on' : 'off'}`"
+              :class="[
+                'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+                on(row, use.id)
+                  ? 'border-primary/30 bg-primary/10 text-foreground'
+                  : 'border-border text-muted-foreground line-through',
+                answerable(row, use.id) ? 'hover:border-primary/50' : 'cursor-not-allowed opacity-60',
+              ]"
+              @click="toggle(row, use.id)"
+            >
+              {{ use.label }}
+            </button>
+          </div>
         </template>
 
         <template #source="{ row }">

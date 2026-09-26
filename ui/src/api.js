@@ -68,6 +68,9 @@ export const api = {
   /* The rules a team already wrote down for whatever reads their code, from
    * this machine's agent folders and from the repository's own. */
   skills: (repository = '') => call(`/api/skills?${query({ repository })}`),
+  /* What a skill can be used for, read from the core so this offers the same
+   * list the cloud does. */
+  uses: () => call('/api/skills/uses'),
   skill: (id, repository = '') => call(`/api/skills/${id}?${query({ repository })}`),
   /* Written where this product owns the folder: a repository, so the team gets
    * it by pulling, or the machine, for what somebody wants everywhere. What
