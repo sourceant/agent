@@ -14,7 +14,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { BookOpenCheck, Plus, ScrollText, Search, Trash2 } from 'lucide-vue-next'
 import EmptyMachine from '~/components/EmptyMachine.vue'
-import { useRepositories } from '~/composables/useRepositories'
+import { EVERY, useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
 
 /* What a team has written down about how work here is done.
@@ -51,7 +51,7 @@ const columns = [
 ]
 
 const router = useRouter()
-const { repositories, chosen, error, fetchRepositories } = useRepositories()
+const { repositories, chosen, error, fetchRepositories } = useRepositories({ all: true })
 const skills = ref([])
 const term = ref('')
 const where = ref('all')
@@ -196,6 +196,7 @@ onMounted(async () => {
       <template #icon><BookOpenCheck class="h-6 w-6" /></template>
       <template #actions>
         <Select v-if="repositories.length > 1" v-model="chosen" size="sm" aria-label="Repository">
+          <option :value="EVERY">All repositories</option>
           <option v-for="repository in repositories" :key="repository.name" :value="repository.name">
             {{ repository.name }}
           </option>

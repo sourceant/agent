@@ -607,8 +607,12 @@ onMounted(async () => {
         </div>
 
         <div v-else-if="tab === 'overview'" class="min-h-0 flex-1 overflow-y-auto">
-          <Empty v-if="!anything" title="Read, not judged" compact>
-            {{ result.note || 'Ask for a review to have it read properly.' }}
+          <Empty v-if="!files.length" title="No changes" compact>
+            {{ where?.branch || 'This checkout' }} matches {{ where?.against || 'its base' }}.
+            Nothing to read.
+          </Empty>
+          <Empty v-else-if="!anything" title="Read, not judged" compact>
+            {{ result.note || 'No model was asked, so nothing was judged.' }}
           </Empty>
 
           <UiCard v-else class="divide-y px-5 py-1">

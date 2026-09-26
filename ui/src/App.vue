@@ -30,12 +30,12 @@ const userOpen = ref(false)
  * because nothing on a machine produces one. Reviews are, because the work
  * being read has not been proposed to anybody yet. */
 const navigation = [
-  { name: 'Overview', href: '/', icon: LayoutDashboard },
-  { name: 'Knowledge', href: '/knowledge', icon: BookOpen },
-  { name: 'Graphs', href: '/graph', icon: Network },
   { name: 'Reviews', href: '/reviews', icon: ShieldCheck },
   { name: 'Skills', href: '/skills', icon: BookOpenCheck },
+  { name: 'Knowledge', href: '/knowledge', icon: BookOpen },
+  { name: 'Graphs', href: '/graph', icon: Network },
   { name: 'Repositories', href: '/repositories', icon: Boxes },
+  { name: 'Overview', href: '/', icon: LayoutDashboard },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
