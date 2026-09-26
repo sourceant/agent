@@ -86,7 +86,7 @@ async function add() {
 
 <template>
   <UiModal :open="open" max-width="lg" @close="emit('close')">
-    <h2 class="text-lg font-semibold mb-3">Add a folder</h2>
+    <h2 class="text-lg font-semibold mb-3">Add folder or repository</h2>
 
     <div class="relative mb-3">
       <Search class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

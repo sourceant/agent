@@ -56,7 +56,7 @@ onMounted(async () => {
       <div class="flex items-center gap-2">
         <UiButton @click="picking = true">
           <Plus class="mr-1.5 h-3.5 w-3.5" />
-          Add a folder
+          Add folder or repository
         </UiButton>
         <UiButton variant="outline" @click="step = 'model'">
           <template v-if="done">Next</template>

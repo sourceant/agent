@@ -112,14 +112,7 @@ const next = computed(() => {
       to: '/reviews',
     }
   }
-  return {
-    tone: 'success',
-    icon: ShieldCheck,
-    title: 'Everything is read',
-    detail: `${model.value} is configured, so a change can be judged as well as read.`,
-    label: 'Review a checkout',
-    to: '/reviews',
-  }
+  return null
 })
 
 const TONES = {
@@ -189,7 +182,7 @@ onMounted(async () => {
     <EmptyMachine v-if="!error && repositories.length === 0" />
 
     <template v-else-if="repositories.length">
-      <UiCard :class="['mb-3 flex flex-wrap items-center gap-4 p-5', TONES[next.tone]]">
+      <UiCard v-if="next" :class="['mb-3 flex flex-wrap items-center gap-4 p-5', TONES[next.tone]]">
         <component :is="next.icon" class="h-5 w-5 shrink-0" />
         <div class="min-w-0 flex-1">
           <p class="font-semibold">{{ next.title }}</p>
@@ -266,16 +259,18 @@ onMounted(async () => {
 
         <UiCard class="p-5">
           <div class="mb-3 flex items-center justify-between gap-3">
-            <h2 class="flex items-center gap-2 text-sm font-semibold">
-              <FileCode class="h-4 w-4" />
-              Worth reading first
-            </h2>
-            <span v-if="attention.since" class="text-xs text-muted-foreground">
-              last {{ attention.since }}
-            </span>
+            <div>
+              <h2 class="flex items-center gap-2 text-sm font-semibold">
+                <FileCode class="h-4 w-4" />
+                Hotspots
+              </h2>
+              <p class="mt-0.5 text-xs text-muted-foreground">
+                Changed most, and most depended on{{ attention.since ? `, last ${attention.since}` : '' }}.
+              </p>
+            </div>
           </div>
-          <Empty v-if="!attention.files.length" title="Nothing standing out" compact>
-            Where recent change lands on what the rest of the code leans on appears here.
+          <Empty v-if="!attention.files.length" title="None" compact>
+            A file has to be both changing and depended on to appear here.
           </Empty>
           <ul v-else class="divide-y">
             <li
@@ -285,7 +280,7 @@ onMounted(async () => {
             >
               <span class="min-w-0 flex-1 truncate font-mono text-xs">{{ file.path }}</span>
               <span class="shrink-0 text-xs text-muted-foreground">
-                {{ file.dependants }} leaning on it · {{ file.changes }} changes
+                {{ file.changes }} changes · {{ file.dependants }} dependants
               </span>
             </li>
           </ul>

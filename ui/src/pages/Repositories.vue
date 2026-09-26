@@ -141,7 +141,7 @@ onUnmounted(() => clearTimeout(asking))
         </div>
         <UiButton variant="glow" @click="picking = true">
           <Plus class="mr-2 h-4 w-4" />
-          Add a folder
+          Add folder or repository
         </UiButton>
       </template>
     </PageHead>
@@ -155,7 +155,7 @@ onUnmounted(() => clearTimeout(asking))
       <template #actions>
         <UiButton variant="glow" @click="picking = true">
           <Plus class="mr-2 h-4 w-4" />
-          Add a folder
+          Add folder or repository
         </UiButton>
       </template>
     </Empty>

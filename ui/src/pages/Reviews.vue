@@ -7,16 +7,15 @@ import {
   Diff,
   DotIndicator,
   Input,
-  ItemCard,
   Markdown,
   Empty,
   Loading,
   Notice,
-  Origin,
   PageHead,
   Section,
   Select,
   Status,
+  Table,
   Tabs,
 } from '@sourceant/design'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -28,7 +27,6 @@ import {
   CircleAlert,
   CircleCheck,
   MessageSquare,
-  Clock,
   FileCode,
   FileText,
   GitCommit,
@@ -57,7 +55,7 @@ import { when } from '~/moments'
 const route = useRoute()
 const router = useRouter()
 const up = useUp()
-const { repositories, chosen, error, mixed, fetchRepositories } = useRepositories({
+const { repositories, chosen, error, fetchRepositories } = useRepositories({
   all: true,
 })
 const running = ref(false)
@@ -71,6 +69,23 @@ const adding = ref('')
 const skills = ref([])
 const past = ref([])
 const term = ref('')
+
+const columns = [
+  { id: 'status', label: 'Status', width: '6rem' },
+  { id: 'review', label: 'Review' },
+  { id: 'repository', label: 'Repository', narrow: true },
+  { id: 'started', label: 'Started', narrow: true },
+  { id: 'took', label: 'Took', align: 'right', narrow: true },
+]
+
+// How long it took, for telling a review that ran from one that gave up at once.
+function took(one) {
+  if (!one.finished || !one.started) return ''
+  const seconds = Math.round((new Date(one.finished) - new Date(one.started)) / 1000)
+  if (seconds < 1) return 'instant'
+  if (seconds < 60) return `${seconds}s`
+  return `${Math.round(seconds / 60)}m`
+}
 
 const earlier = computed(() => {
   const wanted = term.value.trim().toLowerCase()
@@ -500,34 +515,37 @@ onMounted(async () => {
                 <Input v-model="term" size="sm" placeholder="Find a review" class="w-48 pl-8" aria-label="Find a review" />
               </div>
             </div>
-            <div class="space-y-2">
-              <ItemCard
-                v-for="one in earlier"
-                :key="one.id"
-                :title="one.title || one.repository"
-                :subtitle="one.id"
-                pillar="review"
-                hover
-                class="cursor-pointer"
-                @click="router.push(`/reviews/${one.id}`)"
-              >
-                <template #icon><Clock class="h-5 w-5" /></template>
-                <template #badges>
-                  <UiBadge
-                    :variant="one.status === 'done' ? 'success' : one.status === 'failed' ? 'destructive' : 'secondary'"
-                  >
-                    {{ one.status }}
-                  </UiBadge>
-                </template>
-                <template #meta>
-                  <span>{{ when(one.started) }}</span>
-                  <Origin v-if="mixed" :name="one.repository">
-                    <template #icon><Boxes class="h-3 w-3" /></template>
-                  </Origin>
-                  <span v-else class="font-mono">{{ one.repository }}</span>
-                </template>
-              </ItemCard>
-            </div>
+
+            <Table :columns="columns" :rows="earlier" row-key="id" label="Earlier reviews">
+              <template #status="{ row }">
+                <UiBadge
+                  :variant="row.status === 'done' ? 'success' : row.status === 'failed' ? 'destructive' : 'secondary'"
+                >
+                  {{ row.status }}
+                </UiBadge>
+              </template>
+              <template #review="{ row }">
+                <button
+                  type="button"
+                  class="block max-w-md truncate text-left font-medium hover:text-primary"
+                  @click="router.push(`/reviews/${row.id}`)"
+                >
+                  {{ row.title || 'Unnamed' }}
+                </button>
+                <span v-if="row.error" class="block max-w-md truncate text-xs text-destructive">
+                  {{ row.error }}
+                </span>
+              </template>
+              <template #repository="{ row }">
+                <span class="font-mono text-xs text-muted-foreground">{{ row.repository }}</span>
+              </template>
+              <template #started="{ row }">
+                <span class="text-muted-foreground">{{ when(row.started) }}</span>
+              </template>
+              <template #took="{ row }">
+                <span class="tabular-nums text-muted-foreground">{{ took(row) }}</span>
+              </template>
+            </Table>
           </template>
         </template>
       </template>
