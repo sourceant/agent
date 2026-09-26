@@ -48,6 +48,12 @@ const where = ref('all')
 const lists = ref({ [NEVER]: [], [ALWAYS]: [] })
 const onlyRead = ref(false)
 
+const answers = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'always', label: 'Always' },
+  { id: 'never', label: 'Never' },
+]
+
 const wheres = [
   { id: 'all', label: 'All' },
   { id: REPOSITORY, label: 'This repository' },
@@ -80,12 +86,12 @@ const lines = (value) =>
 function decided(skill) {
   if (lists.value[NEVER].includes(skill.id)) return 'never'
   if (lists.value[ALWAYS].includes(skill.id)) return 'always'
-  return 'relevant'
+  return 'auto'
 }
 
 // What the author said, worth showing only where nobody here has answered.
 function author(skill) {
-  if (decided(skill) !== 'relevant') return ''
+  if (decided(skill) !== 'auto') return ''
   if (skill.reviews === true) return 'its author says always'
   if (skill.reviews === false) return 'its author says never'
   if (!skill.automatic) return 'only when you invoke it'
@@ -95,7 +101,7 @@ function author(skill) {
 // Whether a review would read it at all, which is what the filter narrows to.
 function read(skill) {
   const mine = decided(skill)
-  if (mine !== 'relevant') return mine === 'always'
+  if (mine !== 'auto') return mine === 'always'
   if (skill.reviews === false) return false
   return skill.automatic || skill.reviews === true
 }
@@ -200,8 +206,8 @@ onMounted(async () => {
         </label>
       </div>
       <p class="mb-4 text-xs text-muted-foreground">
-        At most five skills are read against one change. Anything set to always counts towards
-        those five.
+        Auto picks a skill when its wording or its files match the change. At most five are read
+        against one change.
       </p>
 
       <div v-if="shown.length" class="space-y-3">
@@ -221,17 +227,15 @@ onMounted(async () => {
           </template>
           <p class="text-sm text-muted-foreground">{{ skill.description }}</p>
           <template #meta>
-            <Select
-              :model-value="decided(skill)"
-              size="sm"
-              :aria-label="`When ${skill.name} is read against a change`"
-              @click.stop
-              @change="decide(skill, $event.target.value)"
-            >
-              <option value="relevant">When it looks relevant</option>
-              <option value="always">Always in reviews</option>
-              <option value="never">Never in reviews</option>
-            </Select>
+            <span @click.stop>
+              <Tabs
+                :model-value="decided(skill)"
+                :tabs="answers"
+                size="sm"
+                :label="`Whether ${skill.name} is read against a change`"
+                @update:model-value="decide(skill, $event)"
+              />
+            </span>
             <span v-if="author(skill)">{{ author(skill) }}</span>
             <span v-if="skill.paths?.length" class="font-mono">{{ skill.paths.join(' ') }}</span>
           </template>

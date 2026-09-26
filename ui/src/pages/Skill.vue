@@ -71,7 +71,7 @@ const panes = [
 // Kept in the skill's own frontmatter, in the map the format sets aside for
 // whatever a client wants to record, so a skill carrying it stays portable.
 const choices = [
-  { id: null, label: 'When it looks relevant' },
+  { id: null, label: 'Auto' },
   { id: true, label: 'Always' },
   { id: false, label: 'Never' },
 ]
@@ -79,7 +79,7 @@ const choices = [
 const saying = computed(() => {
   if (draft.value.reviews === true) return 'Read against every change here.'
   if (draft.value.reviews === false) return 'Left out of reviews entirely.'
-  return 'Picked when what it says matches what a change touches.'
+  return 'Picked when its wording or its files match the change.'
 })
 
 const savedInto = computed(() =>
