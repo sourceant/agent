@@ -702,7 +702,7 @@ onMounted(async () => {
 
           <Section
             v-if="summary?.key_improvements?.length"
-            title="Worth changing"
+            title="Recommended changes"
             tone="warning"
             :count="summary.key_improvements.length"
             collapsible
