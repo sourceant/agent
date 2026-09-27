@@ -357,14 +357,11 @@ async function collect(id, useModel = true) {
     error.value = answered.error
     return
   }
-  if (answered.repository && answered.repository !== chosen.value) {
-    chosen.value = answered.repository
-  }
   result.value = answered.review
   looking.value = ''
   tab.value = 'overview'
-  loadPast()
-  if (answered.repository) chosen.value = answered.repository
+  // Opening one does not narrow the page to its repository: coming back would
+  // then show a listing of one, and the choice is shared with every screen.
   // What it was actually read against, so removing one and running again is
   // the obvious next move rather than a form to fill in.
   picked.value = (answered.review.skills ?? []).map((one) => one.id)
