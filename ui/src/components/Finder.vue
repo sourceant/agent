@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { CommandSearch } from '@sourceant/design'
+import { GlobalSearch } from '@sourceant/design'
 import { useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
 
@@ -138,7 +138,7 @@ function go(item, group) {
 </script>
 
 <template>
-  <CommandSearch
+  <GlobalSearch
     v-model="term"
     v-model:open="open"
     :groups="groups"

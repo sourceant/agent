@@ -14,7 +14,7 @@
   "dependencies": {
     "@dicebear/collection": "^9.2.2",
     "@dicebear/core": "^9.2.2",
-    "@sourceant/design": "github:sourceant/design#180f8eb",
+    "@sourceant/design": "github:sourceant/design#1a403b6",
     "@tailwindcss/typography": "^0.5.20",
     "3d-force-graph": "^1.80.0",
     "class-variance-authority": "^0.7.1",
