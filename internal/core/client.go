@@ -589,7 +589,9 @@ type Ask struct {
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	Skills      []string `json:"skills"`
-	UseModel    bool     `json:"use_model"`
+	// Absent rather than false when nobody said, so the core decides. A client
+	// that sends no flag gets a judged review, not a silent read.
+	UseModel *bool `json:"use_model,omitempty"`
 }
 
 // Reading is one review, whether it has finished or not.
