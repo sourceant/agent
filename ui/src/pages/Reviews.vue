@@ -640,7 +640,7 @@ onMounted(async () => {
                message says it to whoever opens it, not to everybody. -->
           <Section
             v-if="unmet.length || overall.length"
-            title="Against what this team wrote down"
+            title="Skill checks"
             tone="warning"
             :count="unmet.length + overall.length"
             collapsible
