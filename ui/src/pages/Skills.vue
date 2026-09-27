@@ -36,12 +36,11 @@ const REPOSITORY = 'repository'
 const GLOBAL = 'global'
 const OURS = [REPOSITORY, GLOBAL]
 
-/* A skill is used for everything this product does until a use is turned off,
- * which is stored on the skill itself. A skill belonging to a coding agent
- * cannot be edited, so for code review the answer is kept on this machine,
- * where it outranks the file. */
-const REVIEW = 'review'
-const NEVER = 'skills.never_in_reviews'
+/* A skill is used for everything this product does until a use is turned off.
+ * Its own file carries what its author said. A skill belonging to a coding agent
+ * cannot be edited, so what this machine says is kept in a setting of the same
+ * shape, and outranks the file. */
+const SAID = 'skills.uses'
 
 const columns = [
   { id: 'skill', label: 'Skill' },
@@ -55,7 +54,7 @@ const { repositories, chosen, error, fetchRepositories } = useRepositories({ all
 const skills = ref([])
 const term = ref('')
 const where = ref('all')
-const off = ref([])
+const said = ref({})
 const uses = ref([])
 const onlyRead = ref(false)
 
@@ -81,35 +80,25 @@ const shown = computed(() => {
   })
 })
 
-const lines = (value) =>
-  String(value ?? '')
-    .split('\n')
-    .map((one) => one.trim())
-    .filter(Boolean)
-
 const ours = (skill) => OURS.includes(skill.origin)
 const home = (skill) =>
   skill.origin === GLOBAL ? 'everywhere' : skill.origin === REPOSITORY ? chosen.value : skill.origin
 
-// Whether one use has it. Off is said; anything else is on.
+// Whether one use has it: what was said here, then what the file says.
 function on(skill, use) {
-  if (use === REVIEW && off.value.includes(skill.id)) return false
+  const mine = said.value[skill.id]?.[use]
+  if (typeof mine === 'boolean') return mine
   return skill.applications?.[use] !== false
 }
 
 // Whether a review would read it at all, which is what the filter narrows to.
-const read = (skill) => on(skill, REVIEW)
-
-// A use somebody may answer here: a file that belongs to a coding agent is not
-// ours to change, and code review is the one this machine keeps its own answer
-// for.
-const answerable = (skill, use) => ours(skill) || use === REVIEW
+const read = (skill) => on(skill, 'review')
 
 async function toggle(skill, use) {
   const wanted = !on(skill, use)
   try {
     if (ours(skill)) await state(skill, use, wanted)
-    else await keep(skill, wanted)
+    else await keep(skill, use, wanted)
     error.value = ''
   } catch (caught) {
     error.value = caught.message
@@ -136,16 +125,18 @@ async function state(skill, use, wanted) {
     automatic: full.automatic ?? true,
     applications,
   })
-  if (use === REVIEW) await keep(skill, true)
+  await keep(skill, use, null)
 }
 
-// Somebody else's file: kept on this machine instead.
-async function keep(skill, wanted) {
-  const next = wanted
-    ? off.value.filter((id) => id !== skill.id)
-    : [...off.value, skill.id]
-  await api.setSetting(NEVER, next.join('\n'))
-  off.value = next
+// Somebody else's file: what we say about it is kept here instead. Null is
+// nothing said, which leaves the file to answer.
+async function keep(skill, use, wanted) {
+  const next = { ...said.value, [skill.id]: { ...said.value[skill.id] } }
+  if (wanted === null) delete next[skill.id][use]
+  else next[skill.id][use] = wanted
+  if (!Object.keys(next[skill.id]).length) delete next[skill.id]
+  await api.setSetting(SAID, next)
+  said.value = next
 }
 
 async function load() {
@@ -156,7 +147,8 @@ async function load() {
       uses.value.length ? uses.value : api.uses(),
     ])
     skills.value = page.skills
-    off.value = lines(settings.find((one) => one.key === NEVER)?.value)
+    const held = settings.find((one) => one.key === SAID)?.value
+    said.value = held && typeof held === 'object' ? held : {}
     uses.value = offered
     error.value = ''
   } catch (caught) {
@@ -251,15 +243,13 @@ onMounted(async () => {
               v-for="use in uses"
               :key="use.id"
               type="button"
-              :disabled="!answerable(row, use.id)"
               :aria-pressed="on(row, use.id)"
               :title="`${use.label}: ${on(row, use.id) ? 'on' : 'off'}`"
               :class="[
-                'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+                'rounded-full border px-2 py-0.5 text-[11px] transition-colors hover:border-primary/50',
                 on(row, use.id)
                   ? 'border-primary/30 bg-primary/10 text-foreground'
                   : 'border-border text-muted-foreground line-through',
-                answerable(row, use.id) ? 'hover:border-primary/50' : 'cursor-not-allowed opacity-60',
               ]"
               @click="toggle(row, use.id)"
             >

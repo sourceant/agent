@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Folders sit under the owner their name carries, say when each was last read,
   and show a read as it happens
 - Adding a folder searches for one by name rather than walking the tree
-- Which uses a skill has is answered from the list, for any skill, including the
-  folders a coding agent syncs and nothing here may edit
+- Which uses a skill has is answered from the list, for every use and every
+  skill, including the folders a coding agent syncs and nothing here may edit
 - Reading a skill and changing one are two screens
 - The model is chosen from what the core can reach, and saving a key says
   whether the provider accepts the pair
