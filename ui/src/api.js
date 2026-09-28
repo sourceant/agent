@@ -17,6 +17,8 @@ const query = (values) =>
 
 export const api = {
   status: () => call('/health'),
+  architecture: (repository, depth = 1) => call(`/api/architecture?${query({ repository, depth })}`),
+  compareArchitecture: (baseline) => call('/api/architecture/compare', { method: 'POST', body: JSON.stringify(baseline) }),
 
   repositories: () => call('/api/repositories'),
   addRepository: (path, name) =>
@@ -38,11 +40,13 @@ export const api = {
   attention: (repository) => call(`/api/attention?${query({ repository })}`),
 
   /* q narrows to what holds it, which the core does rather than the screen. */
-  graph: (repository, { includeTests = false, pathPrefix = '', q = '', nodeLimit = 0 } = {}) =>
+  graph: (repository, { includeTests = false, pathPrefix = '', focus = '', depth, q = '', nodeLimit = 0 } = {}) =>
     call(`/api/graph?${query({
       repository,
       include_tests: includeTests,
       path_prefix: pathPrefix,
+      focus,
+      depth,
       q,
       node_limit: nodeLimit || '',
     })}`),

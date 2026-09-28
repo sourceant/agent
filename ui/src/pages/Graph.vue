@@ -1,14 +1,17 @@
 <script setup>
-import { onMounted } from 'vue'
+import { defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { Network } from 'lucide-vue-next'
-import { Notice, PageHead, Select } from '@sourceant/design'
+import { Notice, PageHead, Select, Tabs } from '@sourceant/design'
 import GraphWorkbench from '~/components/GraphWorkbench.vue'
 import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useRepositories } from '~/composables/useRepositories'
 
 const route = useRoute()
 const { repositories, chosen, one, error, fetchRepositories } = useRepositories()
+const Architecture = defineAsyncComponent(() => import('~/components/Architecture.vue'))
+/* A search names what it was looking for, so it opens the view that can show it. */
+const view = ref(route.query.q ? 'graph' : 'components')
 
 /* Only the code source. Knowledge is a list on a machine: nothing serves the
  * relationships between one record and another, so there is no graph of it to
@@ -40,8 +43,10 @@ onMounted(async () => {
 
     <EmptyMachine v-if="repositories.length === 0" />
 
+    <Tabs v-if="repositories.length" v-model="view" :tabs="[{ id: 'components', label: 'Components' }, { id: 'graph', label: 'Code graph' }]" label="Graph view" class="mb-4 self-start" />
+    <Architecture v-if="repositories.length && view === 'components'" :repository="one" />
     <GraphWorkbench
-      v-else
+      v-else-if="repositories.length"
       :key="one"
       :repository="one"
       :find="String(route.query.q ?? '')"

@@ -153,6 +153,9 @@ func TestGraphPassesOnWhatNarrowsADrawing(t *testing.T) {
 		PathPrefix:   "src/config/",
 		IncludeTests: true,
 		NodeLimit:    120,
+		Focus:        "file:app/charge.py",
+		Depth:        3,
+		Query:        "charge",
 	})
 	if err != nil {
 		t.Fatalf("reading graph: %v", err)
@@ -163,6 +166,9 @@ func TestGraphPassesOnWhatNarrowsADrawing(t *testing.T) {
 		"path_prefix=src%2Fconfig%2F",
 		"include_tests=true",
 		"node_limit=120",
+		"focus=file%3Aapp%2Fcharge.py",
+		"depth=3",
+		"q=charge",
 	} {
 		if !strings.Contains(asked, want) {
 			t.Errorf("query %q is missing %q", asked, want)
