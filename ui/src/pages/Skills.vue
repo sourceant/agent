@@ -128,8 +128,7 @@ async function state(skill, use, wanted) {
   await keep(skill, use, null)
 }
 
-// Somebody else's file: what we say about it is kept here instead. Null is
-// nothing said, which leaves the file to answer.
+// Somebody else's file: what we say about it is kept here instead.
 async function keep(skill, use, wanted) {
   const next = { ...said.value, [skill.id]: { ...said.value[skill.id] } }
   if (wanted === null) delete next[skill.id][use]

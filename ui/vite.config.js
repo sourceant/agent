@@ -20,9 +20,7 @@ export default defineConfig({
   // the app instead of pre-bundled as a dependency.
   optimizeDeps: { exclude: ['@sourceant/design'] },
   // The view calls the agent at the origin it is served from, which in
-  // development is this dev server. What the agent answers is handed straight
-  // back, so the view can be changed without rebuilding the binary that
-  // embeds it.
+  // development is this dev server.
   server: {
     proxy: Object.fromEntries(
       ['/api', '/health'].map((path) => [

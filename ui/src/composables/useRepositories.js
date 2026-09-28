@@ -17,8 +17,7 @@ export function useRepositories({ all = false } = {}) {
   // what decides if a card has to say which one it came from.
   const mixed = computed(() => all && !chosen.value && repositories.value.length > 1)
 
-  // One repository, for a screen that can only draw one. The choice when there
-  // is one, the first otherwise.
+  // One repository, for a screen that can only draw one.
   const one = computed(() => chosen.value || repositories.value[0]?.name || '')
 
   async function fetchRepositories() {

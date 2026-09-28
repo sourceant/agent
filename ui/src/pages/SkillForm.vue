@@ -56,14 +56,12 @@ const draft = ref({
   body: '',
   paths: [],
   // Which uses it is kept out of, and whether it may be selected without being
-  // named. Two questions. Its kind is carried as it was written: review-pass
-  // and initialization-pass name an activity, which is what uses already say.
+  // named.
   applications: {},
   automatic: true,
   type: '',
 })
-// Either GLOBAL, or the name of the repository it is for. One value, so there
-// is no second place for the destination to come from.
+// Either GLOBAL, or the name of the repository it is for.
 const belongsTo = ref(GLOBAL)
 const pane = ref('write')
 const details = ref(false)

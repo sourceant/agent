@@ -25,8 +25,7 @@ const router = createRouter({
     // A review has a name, so an agent can hand somebody a link to one.
     { path: '/reviews/:id', component: Reviews },
     { path: '/skills', component: Skills },
-    // Writing one and changing one are the same form, entered on purpose. Both
-    // stand ahead of the name, which swallows anything with a slash in it.
+    // Writing one and changing one are the same form, entered on purpose.
     { path: '/skills/new', component: SkillForm },
     { path: '/skills/:id(.*)/edit', component: SkillForm },
     // A rule kept in a nested folder has a slash in its name.

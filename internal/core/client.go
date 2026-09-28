@@ -194,9 +194,6 @@ func (c *Client) Graph(ctx context.Context, repository string, opts GraphOptions
 }
 
 // NodePage is a page of nodes, and how many there are in all.
-//
-// The count is the point for anything that only wants the number: a whole scope
-// is thousands of nodes and nobody needs them to know there are 1,204 files.
 type NodePage struct {
 	Nodes   []Node `json:"nodes"`
 	Total   int    `json:"total"`
@@ -386,11 +383,10 @@ type Skill struct {
 	Path        string   `json:"path"`
 	Paths       []string `json:"paths"`
 	// Type is how it is read: prose the reviewer is told, or a pass of its own.
-	// Not what it is for, which is what Applications answers.
 	Type    string `json:"type"`
 	Reviews *bool  `json:"reviews"`
-	// Applications is what the skill is for: a purpose, and whether it applies
-	// to it. Reviews is the one purpose this product reads, answered from here.
+	// Applications is what the skill is for: a purpose, and whether it applies to
+	// it.
 	Applications map[string]bool `json:"applications"`
 	Automatic    bool            `json:"automatic"`
 	Body         string          `json:"body,omitempty"`
@@ -444,8 +440,7 @@ type Stated struct {
 	Body        string   `json:"body"`
 	Paths       []string `json:"paths"`
 	Reviews     *bool    `json:"reviews"`
-	// What it is for, and how it is read. Two questions: a skill can be for
-	// several things, and being read as a pass of its own is not one of them.
+	// What it is for, and how it is read.
 	Applications map[string]bool `json:"applications"`
 	Type         string          `json:"type"`
 	// Automatic is whether this product may pick it without being asked, which
@@ -589,8 +584,7 @@ type Ask struct {
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	Skills      []string `json:"skills"`
-	// Absent rather than false when nobody said, so the core decides. A client
-	// that sends no flag gets a judged review, not a silent read.
+	// Absent rather than false when nobody said, so the core decides.
 	UseModel *bool `json:"use_model,omitempty"`
 }
 
@@ -675,10 +669,8 @@ type Offering struct {
 	Models   []string `json:"models"`
 }
 
-// Models is every model this machine can name, by provider.
-//
-// Read from the core rather than written down here: the list changes with the
-// router that makes the call, not with this process.
+// Models is every model this machine can name, by provider, read from the core
+// that would make the call.
 func (c *Client) Models(ctx context.Context) ([]Offering, error) {
 	return get[[]Offering](ctx, c, "/api/local/settings/models", nil)
 }
@@ -689,8 +681,7 @@ type Usable struct {
 	Reason string `json:"reason"`
 }
 
-// CheckModel asks the provider whether this pair works. Anything left empty is
-// taken from what is set on this machine.
+// CheckModel asks the provider whether this pair works.
 func (c *Client) CheckModel(ctx context.Context, model, key, baseURL string) (Usable, error) {
 	return send[Usable](ctx, c, http.MethodPost, "/api/local/settings/models/check", nil,
 		map[string]string{"model": model, "api_key": key, "base_url": baseURL})

@@ -18,8 +18,7 @@ import {
 
 defineProps({
   setting: { type: Object, required: true },
-  // One of a known set, where somebody else keeps the set. Long enough that a
-  // native select is useless, which is what SearchableSelect is for.
+  // One of a known set, where somebody else keeps the set.
   options: { type: Array, default: () => [] },
 })
 

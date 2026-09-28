@@ -79,8 +79,7 @@ async function refresh() {
 }
 
 // A read that somebody else started, by adding a folder or on the schedule,
-// finishes without anybody pressing anything here. Only the list is asked for
-// while it runs: counting means a call per repository.
+// finishes without anybody pressing anything here.
 function keepAsking() {
   clearTimeout(asking)
   if (!reading.value) return

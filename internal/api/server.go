@@ -523,8 +523,7 @@ func (s *Server) resetSetting(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) browse(w http.ResponseWriter, r *http.Request) {
 	// A name to search for answers with what matches it, anywhere under home,
-	// rather than with one directory's contents. Somebody who knows the folder
-	// types it; somebody who does not walks down to it.
+	// rather than with one directory's contents.
 	if term := r.URL.Query().Get("q"); strings.TrimSpace(term) != "" {
 		found, err := browse.Find(term)
 		if err != nil {

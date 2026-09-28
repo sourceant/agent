@@ -37,9 +37,7 @@ export const api = {
    * time, and is also the shortest list of files worth reading first. */
   attention: (repository) => call(`/api/attention?${query({ repository })}`),
 
-  /* q narrows to what holds it, which the core does rather than the screen: a
-   * graph is thousands of nodes. It narrows what was loaded, so a search wants
-   * the whole scope loaded and a drawing does not. */
+  /* q narrows to what holds it, which the core does rather than the screen. */
   graph: (repository, { includeTests = false, pathPrefix = '', q = '', nodeLimit = 0 } = {}) =>
     call(`/api/graph?${query({
       repository,

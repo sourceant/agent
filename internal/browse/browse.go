@@ -81,16 +81,13 @@ func isRepository(path string) bool {
 	return err == nil && (info.IsDir() || info.Mode().IsRegular())
 }
 
-// How far down the walk goes, and how much it answers with. A person typing a
-// name wants the folder, not every folder: the walk stops rather than reading a
-// whole disk.
+// How far down the walk goes, and how much it answers with.
 const (
 	Depth   = 6
 	Results = 40
 )
 
-// skipped names a directory whose contents nobody is looking for. Dependencies
-// and build output hold more directories than the rest of a machine together.
+// skipped names a directory whose contents nobody is looking for.
 var skipped = map[string]bool{
 	"node_modules": true,
 	"vendor":       true,
@@ -103,11 +100,6 @@ var skipped = map[string]bool{
 }
 
 // Find looks for directories whose name contains term, starting at home.
-//
-// Typing the name is how somebody finds a folder they already know; walking
-// down to it one click at a time is how they find it when they do not. Working
-// trees come first, then the shallower paths, because a repository is what this
-// is nearly always for.
 func Find(term string) ([]Entry, error) {
 	term = strings.ToLower(strings.TrimSpace(term))
 	if term == "" {

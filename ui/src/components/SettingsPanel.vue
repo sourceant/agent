@@ -32,7 +32,6 @@ const saved = ref(false)
 const mine = computed(() => settings.value.filter((s) => s.group === props.group))
 // Tuning is kept behind a line somebody has to open, because a screen of
 // twenty fields asks twenty questions and most of them have an answer already.
-// The one setting that is a choice from a list somebody else keeps.
 const CATALOGUE = 'model.name'
 const offered = ref([])
 
@@ -68,8 +67,7 @@ const changed = computed(() =>
   }),
 )
 
-// Every model the core can name, grouped by provider. A model already set that
-// no provider lists is offered too, or the field reads as nothing being set.
+// Every model the core can name, grouped by provider.
 const choices = computed(() => {
   const named = offered.value.flatMap((one) =>
     one.models.map((model) => ({ value: model, label: model, group: one.provider })),
