@@ -19,6 +19,16 @@ export default defineConfig({
   // The design package ships source rather than a build, so it is compiled with
   // the app instead of pre-bundled as a dependency.
   optimizeDeps: { exclude: ['@sourceant/design'] },
+  // The view calls the agent at the origin it is served from, which in
+  // development is this dev server.
+  server: {
+    proxy: Object.fromEntries(
+      ['/api', '/health'].map((path) => [
+        path,
+        process.env.SOURCEANT_AGENT_URL || 'http://127.0.0.1:8930',
+      ]),
+    ),
+  },
   build: {
     outDir: '../internal/ui/assets',
     emptyOutDir: true,

@@ -143,3 +143,76 @@ func TestBrowsingNowhereSaysSo(t *testing.T) {
 		t.Errorf("got %d, want 404", response.Code)
 	}
 }
+
+// The list of models is the core's, because the thing that would make the call
+// is the thing that knows what it can call.
+func TestTheModelsThisMachineCanNameAreListed(t *testing.T) {
+	reader := &stubReader{offered: []core.Offering{
+		{Provider: "anthropic", Models: []string{"anthropic/claude-sonnet-4-5"}},
+	}}
+	server := New(reader, stubSupervisor{}, "dev", "")
+
+	response := call(t, server, "/api/models")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", response.Code)
+	}
+	if !strings.Contains(response.Body.String(), "anthropic/claude-sonnet-4-5") {
+		t.Errorf("the model is missing from %s", response.Body.String())
+	}
+}
+
+func TestAMachineWithNoModelsAnswersAnEmptyList(t *testing.T) {
+	server := New(&stubReader{}, stubSupervisor{}, "dev", "")
+
+	response := call(t, server, "/api/models")
+
+	if strings.TrimSpace(response.Body.String()) != "[]" {
+		t.Errorf("got %s, want an empty list a screen can draw", response.Body.String())
+	}
+}
+
+func TestAKeyIsCheckedAgainstTheProviderRatherThanGuessedAt(t *testing.T) {
+	reader := &stubReader{usable: core.Usable{Usable: false, Reason: "No access to that model."}}
+	server := New(reader, stubSupervisor{}, "dev", "")
+
+	response := body(t, server, http.MethodPost, "/api/models/check",
+		`{"model":"anthropic/one","api_key":"sk-test"}`)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", response.Code)
+	}
+	if reader.askedModel != "anthropic/one" || reader.askedKey != "sk-test" {
+		t.Errorf("asked about %q with %q, want what was sent", reader.askedModel, reader.askedKey)
+	}
+	if !strings.Contains(response.Body.String(), "No access to that model.") {
+		t.Errorf("the reason is missing from %s", response.Body.String())
+	}
+}
+
+// A screen that wants a number does not want a graph: the count comes back
+// without the nodes.
+func TestNodesAnswersTheCountWithoutTheWholeScope(t *testing.T) {
+	reader := &stubReader{}
+	server := New(reader, stubSupervisor{}, "dev", "")
+
+	response := call(t, server, "/api/nodes?repository=acme/billing&labels=file&limit=1")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", response.Code)
+	}
+	if reader.askedFor != "acme/billing" || len(reader.askedLabels) != 1 {
+		t.Errorf("asked for %q with %v, want the repository and the label", reader.askedFor, reader.askedLabels)
+	}
+	if !strings.Contains(response.Body.String(), "1204") {
+		t.Errorf("the count is missing from %s", response.Body.String())
+	}
+}
+
+func TestNodesRefusesToGuessWhichRepositoryIsMeant(t *testing.T) {
+	server := New(&stubReader{}, stubSupervisor{}, "dev", "")
+
+	if code := call(t, server, "/api/nodes").Code; code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", code)
+	}
+}

@@ -18,6 +18,7 @@ import {
 import { createAvatar } from '@dicebear/core'
 import { notionists } from '@dicebear/collection'
 import { useTheme } from '~/composables/useTheme'
+import Finder from '~/components/Finder.vue'
 import Onboarding from '~/components/Onboarding.vue'
 
 const { isDark, toggleTheme, restoreTheme } = useTheme()
@@ -30,10 +31,10 @@ const userOpen = ref(false)
  * being read has not been proposed to anybody yet. */
 const navigation = [
   { name: 'Overview', href: '/', icon: LayoutDashboard },
-  { name: 'Knowledge', href: '/knowledge', icon: BookOpen },
-  { name: 'Graphs', href: '/graph', icon: Network },
   { name: 'Reviews', href: '/reviews', icon: ShieldCheck },
   { name: 'Skills', href: '/skills', icon: BookOpenCheck },
+  { name: 'Knowledge', href: '/knowledge', icon: BookOpen },
+  { name: 'Graphs', href: '/graph', icon: Network },
   { name: 'Repositories', href: '/repositories', icon: Boxes },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
@@ -84,6 +85,8 @@ onUnmounted(() => document.removeEventListener('click', closeDropdowns))
         </nav>
 
         <div class="flex-1 min-w-0" />
+
+        <Finder :pages="navigation" />
 
         <div class="relative shrink-0" data-dropdown="user">
           <button

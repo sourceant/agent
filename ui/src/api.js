@@ -37,8 +37,20 @@ export const api = {
    * time, and is also the shortest list of files worth reading first. */
   attention: (repository) => call(`/api/attention?${query({ repository })}`),
 
-  graph: (repository, { includeTests = false, pathPrefix = '' } = {}) =>
-    call(`/api/graph?${query({ repository, include_tests: includeTests, path_prefix: pathPrefix })}`),
+  /* q narrows to what holds it, which the core does rather than the screen. */
+  graph: (repository, { includeTests = false, pathPrefix = '', q = '', nodeLimit = 0 } = {}) =>
+    call(`/api/graph?${query({
+      repository,
+      include_tests: includeTests,
+      path_prefix: pathPrefix,
+      q,
+      node_limit: nodeLimit || '',
+    })}`),
+
+  /* A page of nodes, or just the count of them: total comes back whatever the
+   * limit, so a screen wanting a number asks for one node. */
+  nodes: (repository, { labels = [], limit = 1 } = {}) =>
+    call(`/api/nodes?${query({ repository, limit })}${labels.map((one) => `&labels=${encodeURIComponent(one)}`).join('')}`),
 
   knowledge: (repository) => call(`/api/knowledge?${query({ repository, limit: 100 })}`),
   recordKnowledge: (item) =>
@@ -46,7 +58,7 @@ export const api = {
   forgetKnowledge: (repository, id) =>
     call(`/api/knowledge?${query({ repository, id })}`, { method: 'DELETE' }),
 
-  browse: (path = '') => call(`/api/browse?${query({ path })}`),
+  browse: (path = '', q = '') => call(`/api/browse?${query({ path, q })}`),
 
   /* Reading what a repository already states. Asking without recording is the
    * safe half, so a person can see what would be written before it is. */
@@ -59,6 +71,9 @@ export const api = {
   /* The rules a team already wrote down for whatever reads their code, from
    * this machine's agent folders and from the repository's own. */
   skills: (repository = '') => call(`/api/skills?${query({ repository })}`),
+  /* What a skill can be used for, read from the core so this offers the same
+   * list the cloud does. */
+  uses: () => call('/api/skills/uses'),
   skill: (id, repository = '') => call(`/api/skills/${id}?${query({ repository })}`),
   /* Written where this product owns the folder: a repository, so the team gets
    * it by pulling, or the machine, for what somebody wants everywhere. What
@@ -66,7 +81,13 @@ export const api = {
   recordSkill: (skill) =>
     call('/api/skills', {
       method: 'PUT',
-      body: JSON.stringify({ scope: 'repository', paths: [], reviews: null, ...skill }),
+      body: JSON.stringify({
+        scope: 'repository',
+        paths: [],
+        applications: {},
+        type: '',
+        ...skill,
+      }),
     }),
   forgetSkill: (repository, scope, id) =>
     call(`/api/skills?${query({ repository, scope, id })}`, { method: 'DELETE' }),
@@ -87,6 +108,14 @@ export const api = {
   reviews: (repository = '') => call(`/api/reviews?${query({ repository })}`),
 
   settings: () => call('/api/settings'),
+  /* Which models can be named, and whether the key here can use one. Both come
+   * from the core: it is the thing that would make the call. */
+  models: () => call('/api/models'),
+  checkModel: (model = '', apiKey = '', baseUrl = '') =>
+    call('/api/models/check', {
+      method: 'POST',
+      body: JSON.stringify({ model, api_key: apiKey, base_url: baseUrl }),
+    }),
   setSetting: (key, value) =>
     call('/api/settings', { method: 'PUT', body: JSON.stringify({ key, value }) }),
   resetSetting: (key) => call(`/api/settings?${query({ key })}`, { method: 'DELETE' }),

@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sourceant/agent/internal/browse"
@@ -25,6 +26,7 @@ type Reader interface {
 	Healthy(ctx context.Context) bool
 	Repositories(ctx context.Context) ([]core.Repository, error)
 	Graph(ctx context.Context, repository string, opts core.GraphOptions) (core.Graph, error)
+	Nodes(ctx context.Context, repository string, opts core.NodeOptions) (core.NodePage, error)
 	Attention(ctx context.Context, repository string) (core.Attention, error)
 	Register(ctx context.Context, path, name string) (core.Repository, error)
 	Forget(ctx context.Context, path string) error
@@ -41,6 +43,9 @@ type Reader interface {
 	Reviewed(ctx context.Context, id string) (core.Reading, error)
 	Reviews(ctx context.Context, repository string) ([]core.Reading, error)
 	Settings(ctx context.Context) ([]core.Setting, error)
+	Uses(ctx context.Context) ([]core.Use, error)
+	Models(ctx context.Context) ([]core.Offering, error)
+	CheckModel(ctx context.Context, model, key, baseURL string) (core.Usable, error)
 	SetSetting(ctx context.Context, key string, value any) (core.Setting, error)
 	ResetSetting(ctx context.Context, key string) (core.Setting, error)
 }
@@ -120,6 +125,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/settings", s.settings)
 	mux.HandleFunc("PUT /api/settings", s.setSetting)
 	mux.HandleFunc("DELETE /api/settings", s.resetSetting)
+	mux.HandleFunc("GET /api/nodes", s.nodes)
+	mux.HandleFunc("GET /api/skills/uses", s.uses)
+	mux.HandleFunc("GET /api/models", s.models)
+	mux.HandleFunc("POST /api/models/check", s.checkModel)
 	mux.HandleFunc("GET /api/skills", s.skills)
 	mux.HandleFunc("GET /api/skills/{id...}", s.skill)
 	mux.HandleFunc("PUT /api/skills", s.recordSkill)
@@ -178,12 +187,39 @@ func (s *Server) graph(w http.ResponseWriter, r *http.Request) {
 		PathPrefix:   r.URL.Query().Get("path_prefix"),
 		IncludeTests: r.URL.Query().Get("include_tests") == "true",
 		NodeLimit:    limit,
+		Query:        r.URL.Query().Get("q"),
 	})
 	if err != nil {
 		fail(w, err)
 		return
 	}
 	write(w, http.StatusOK, graph)
+}
+
+// A page of nodes, for a screen that wants a count rather than a drawing.
+func (s *Server) nodes(w http.ResponseWriter, r *http.Request) {
+	repository := r.URL.Query().Get("repository")
+	if repository == "" {
+		write(w, http.StatusBadRequest, problem{Error: "name a repository"})
+		return
+	}
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil {
+		limit = 0
+	}
+	page, err := s.reader.Nodes(r.Context(), repository, core.NodeOptions{
+		Labels:   r.URL.Query()["labels"],
+		FilePath: r.URL.Query().Get("file_path"),
+		Limit:    limit,
+	})
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if page.Nodes == nil {
+		page.Nodes = []core.Node{}
+	}
+	write(w, http.StatusOK, page)
 }
 
 func (s *Server) attention(w http.ResponseWriter, r *http.Request) {
@@ -429,6 +465,48 @@ func (s *Server) setSetting(w http.ResponseWriter, r *http.Request) {
 	write(w, http.StatusOK, setting)
 }
 
+func (s *Server) uses(w http.ResponseWriter, r *http.Request) {
+	offered, err := s.reader.Uses(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if offered == nil {
+		offered = []core.Use{}
+	}
+	write(w, http.StatusOK, offered)
+}
+
+func (s *Server) models(w http.ResponseWriter, r *http.Request) {
+	offered, err := s.reader.Models(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	// None is an empty list, never a null, so a screen can draw it.
+	if offered == nil {
+		offered = []core.Offering{}
+	}
+	write(w, http.StatusOK, offered)
+}
+
+func (s *Server) checkModel(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Model   string `json:"model"`
+		APIKey  string `json:"api_key"`
+		BaseURL string `json:"base_url"`
+	}
+	if !readBody(w, r, &body) {
+		return
+	}
+	answer, err := s.reader.CheckModel(r.Context(), body.Model, body.APIKey, body.BaseURL)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	write(w, http.StatusOK, answer)
+}
+
 func (s *Server) resetSetting(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
@@ -444,6 +522,18 @@ func (s *Server) resetSetting(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) browse(w http.ResponseWriter, r *http.Request) {
+	// A name to search for answers with what matches it, anywhere under home,
+	// rather than with one directory's contents.
+	if term := r.URL.Query().Get("q"); strings.TrimSpace(term) != "" {
+		found, err := browse.Find(term)
+		if err != nil {
+			write(w, http.StatusNotFound, problem{Error: err.Error()})
+			return
+		}
+		write(w, http.StatusOK, browse.Listing{Path: browse.Home(), Entries: found})
+		return
+	}
+
 	listing, err := browse.At(r.URL.Query().Get("path"))
 	if err != nil {
 		write(w, http.StatusNotFound, problem{Error: err.Error()})

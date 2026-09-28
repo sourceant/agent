@@ -74,8 +74,19 @@ func TestAskingForAReviewAnswersWithWhereToFindIt(t *testing.T) {
 	if started.ID == "" {
 		t.Error("answered without a name, so nobody could come back for it")
 	}
-	if reader.asked.Against != "dev" || !reader.asked.UseModel {
+	if reader.asked.Against != "dev" || reader.asked.UseModel == nil || !*reader.asked.UseModel {
 		t.Errorf("asked %+v, want what was sent", reader.asked)
+	}
+}
+
+func TestAReviewWithNoModelFlagLeavesTheChoiceToTheCore(t *testing.T) {
+	reader := &stubReader{}
+	server := New(reader, stubSupervisor{}, "dev", "")
+
+	body(t, server, http.MethodPost, "/api/reviews", `{"repository":"acme/billing"}`)
+
+	if reader.asked.UseModel != nil {
+		t.Errorf("sent %v, want nothing said", *reader.asked.UseModel)
 	}
 }
 

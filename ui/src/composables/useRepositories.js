@@ -17,6 +17,9 @@ export function useRepositories({ all = false } = {}) {
   // what decides if a card has to say which one it came from.
   const mixed = computed(() => all && !chosen.value && repositories.value.length > 1)
 
+  // One repository, for a screen that can only draw one.
+  const one = computed(() => chosen.value || repositories.value[0]?.name || '')
+
   async function fetchRepositories() {
     loading.value = true
     try {
@@ -28,11 +31,13 @@ export function useRepositories({ all = false } = {}) {
     } finally {
       loading.value = false
     }
-    if (chosen.value === EVERY && all) return
+    // All repositories is somebody's choice, so a page that can only show one
+    // does not overwrite it: it falls back to `one` for its own data.
+    if (chosen.value === EVERY) return
     if (!repositories.value.some((item) => item.name === chosen.value)) {
       chosen.value = repositories.value[0]?.name ?? ''
     }
   }
 
-  return { repositories, chosen, error, loading, mixed, fetchRepositories }
+  return { repositories, chosen, one, error, loading, mixed, fetchRepositories }
 }

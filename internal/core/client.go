@@ -26,9 +26,14 @@ type envelope[T any] struct {
 }
 
 // Repository is one repository registered on this machine.
+//
+// IndexedAt is empty until it has been read, which is not the same as nothing
+// having changed since, and Reading says a read is under way now.
 type Repository struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	IndexedAt string `json:"indexed_at"`
+	Reading   bool   `json:"reading"`
 }
 
 // Node is one file, import or symbol in a repository's graph.
@@ -164,6 +169,10 @@ type GraphOptions struct {
 	PathPrefix   string
 	IncludeTests bool
 	NodeLimit    int
+	// Query narrows to nodes whose name, id or path holds this, which the core
+	// does: a graph is thousands of nodes and a screen that filters what it was
+	// sent has already been sent all of them.
+	Query string
 }
 
 // Graph reads one repository's whole scope.
@@ -178,7 +187,44 @@ func (c *Client) Graph(ctx context.Context, repository string, opts GraphOptions
 	if opts.NodeLimit > 0 {
 		query.Set("node_limit", strconv.Itoa(opts.NodeLimit))
 	}
+	if opts.Query != "" {
+		query.Set("q", opts.Query)
+	}
 	return get[Graph](ctx, c, "/api/code/graph", query)
+}
+
+// NodePage is a page of nodes, and how many there are in all.
+type NodePage struct {
+	Nodes   []Node `json:"nodes"`
+	Total   int    `json:"total"`
+	HasMore bool   `json:"has_more"`
+}
+
+// NodeOptions narrows a page of nodes to what the index can narrow on without
+// reading the whole scope.
+type NodeOptions struct {
+	Labels   []string
+	FilePath string
+	Limit    int
+	Offset   int
+}
+
+// Nodes is a page of one repository's nodes, filtered by label or by file.
+func (c *Client) Nodes(ctx context.Context, repository string, opts NodeOptions) (NodePage, error) {
+	query := url.Values{"repository": {repository}}
+	for _, label := range opts.Labels {
+		query.Add("labels", label)
+	}
+	if opts.FilePath != "" {
+		query.Set("file_path", opts.FilePath)
+	}
+	if opts.Limit > 0 {
+		query.Set("limit", strconv.Itoa(opts.Limit))
+	}
+	if opts.Offset > 0 {
+		query.Set("offset", strconv.Itoa(opts.Offset))
+	}
+	return get[NodePage](ctx, c, "/api/code/nodes", query)
 }
 
 // Worth is one file where recent change has landed on something the rest of
@@ -336,9 +382,14 @@ type Skill struct {
 	Origin      string   `json:"origin"`
 	Path        string   `json:"path"`
 	Paths       []string `json:"paths"`
-	Reviews     *bool    `json:"reviews"`
-	Automatic   bool     `json:"automatic"`
-	Body        string   `json:"body,omitempty"`
+	// Type is how it is read: prose the reviewer is told, or a pass of its own.
+	Type    string `json:"type"`
+	Reviews *bool  `json:"reviews"`
+	// Applications is what the skill is for: a purpose, and whether it applies to
+	// it.
+	Applications map[string]bool `json:"applications"`
+	Automatic    bool            `json:"automatic"`
+	Body         string          `json:"body,omitempty"`
 }
 
 // SkillPage is the skills on hand.
@@ -359,6 +410,18 @@ func (c *Client) Skills(ctx context.Context, repository string) (SkillPage, erro
 	})
 }
 
+// Use is one thing this product does, that a skill can be for.
+type Use struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// Uses is what a skill can be used for, read from the core so every screen
+// offers the same list.
+func (c *Client) Uses(ctx context.Context) ([]Use, error) {
+	return get[[]Use](ctx, c, "/api/skills/uses", nil)
+}
+
 // Skill is one rule in full, so a person can read what a check was made against.
 func (c *Client) Skill(ctx context.Context, id, repository string) (Skill, error) {
 	return get[Skill](ctx, c, "/api/skills/"+id, url.Values{"repository": {repository}})
@@ -377,6 +440,12 @@ type Stated struct {
 	Body        string   `json:"body"`
 	Paths       []string `json:"paths"`
 	Reviews     *bool    `json:"reviews"`
+	// What it is for, and how it is read.
+	Applications map[string]bool `json:"applications"`
+	Type         string          `json:"type"`
+	// Automatic is whether this product may pick it without being asked, which
+	// is not one of the uses.
+	Automatic bool `json:"automatic"`
 }
 
 // RecordSkill writes a skill down, in a repository or on this machine.
@@ -515,7 +584,8 @@ type Ask struct {
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	Skills      []string `json:"skills"`
-	UseModel    bool     `json:"use_model"`
+	// Absent rather than false when nobody said, so the core decides.
+	UseModel *bool `json:"use_model,omitempty"`
 }
 
 // Reading is one review, whether it has finished or not.
@@ -575,8 +645,11 @@ type Setting struct {
 	Secret      bool     `json:"secret"`
 	// Listed is several of something rather than one thing, kept one to a
 	// line, so a screen draws it as a list rather than as a box of text.
-	Listed bool  `json:"listed"`
-	IsSet  *bool `json:"is_set"`
+	Listed bool `json:"listed"`
+	// Advanced is tuning rather than a choice, kept out of the way of the
+	// settings somebody actually has to answer.
+	Advanced bool  `json:"advanced"`
+	IsSet    *bool `json:"is_set"`
 }
 
 // Settings is everything configurable on this machine.
@@ -588,6 +661,30 @@ func (c *Client) Settings(ctx context.Context) ([]Setting, error) {
 func (c *Client) SetSetting(ctx context.Context, key string, value any) (Setting, error) {
 	return send[Setting](ctx, c, http.MethodPut, "/api/local/settings/"+url.PathEscape(key),
 		nil, map[string]any{"value": value})
+}
+
+// Offering is one provider and the models it can be asked for.
+type Offering struct {
+	Provider string   `json:"provider"`
+	Models   []string `json:"models"`
+}
+
+// Models is every model this machine can name, by provider, read from the core
+// that would make the call.
+func (c *Client) Models(ctx context.Context) ([]Offering, error) {
+	return get[[]Offering](ctx, c, "/api/local/settings/models", nil)
+}
+
+// Usable is whether a key may ask for a model, and why not when it may not.
+type Usable struct {
+	Usable bool   `json:"usable"`
+	Reason string `json:"reason"`
+}
+
+// CheckModel asks the provider whether this pair works.
+func (c *Client) CheckModel(ctx context.Context, model, key, baseURL string) (Usable, error) {
+	return send[Usable](ctx, c, http.MethodPost, "/api/local/settings/models/check", nil,
+		map[string]string{"model": model, "api_key": key, "base_url": baseURL})
 }
 
 // ResetSetting puts one setting back to what it would be if nobody had touched it.

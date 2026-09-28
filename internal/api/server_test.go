@@ -6,8 +6,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/sourceant/agent/internal/browse"
 	"github.com/sourceant/agent/internal/core"
 )
 
@@ -21,6 +24,7 @@ type stubReader struct {
 	err             error
 	askedFor        string
 	askedOptions    core.GraphOptions
+	askedLabels     []string
 	askedEverything bool
 	askedUpdate     bool
 	askedDryRun     bool
@@ -33,6 +37,10 @@ type stubReader struct {
 	asked           core.Ask
 	stated          core.Stated
 	settings        []core.Setting
+	offered         []core.Offering
+	usable          core.Usable
+	askedModel      string
+	askedKey        string
 	setKey          string
 	setValue        any
 	registered      core.Repository
@@ -145,6 +153,25 @@ func (s *stubReader) Settings(context.Context) ([]core.Setting, error) {
 	return s.settings, s.err
 }
 
+func (s *stubReader) Nodes(_ context.Context, repository string, opts core.NodeOptions) (core.NodePage, error) {
+	s.askedFor = repository
+	s.askedLabels = opts.Labels
+	return core.NodePage{Total: 1204}, s.err
+}
+
+func (s *stubReader) Uses(context.Context) ([]core.Use, error) {
+	return []core.Use{{ID: "review", Label: "Code review"}}, s.err
+}
+
+func (s *stubReader) Models(context.Context) ([]core.Offering, error) {
+	return s.offered, s.err
+}
+
+func (s *stubReader) CheckModel(_ context.Context, model, key, _ string) (core.Usable, error) {
+	s.askedModel, s.askedKey = model, key
+	return s.usable, s.err
+}
+
 func (s *stubReader) SetSetting(_ context.Context, key string, value any) (core.Setting, error) {
 	s.setKey, s.setValue = key, value
 	return core.Setting{Key: key}, s.err
@@ -209,12 +236,17 @@ func TestGraphPassesOnWhatNarrowsADrawing(t *testing.T) {
 	reader := &stubReader{}
 	server := New(reader, stubSupervisor{}, "dev", "")
 
-	call(t, server, "/api/graph?repository=acme/billing&path_prefix=app/&include_tests=true&node_limit=200")
+	call(t, server, "/api/graph?repository=acme/billing&path_prefix=app/&include_tests=true&node_limit=200&q=charge")
 
 	if reader.askedFor != "acme/billing" {
 		t.Errorf("asked for %q, want acme/billing", reader.askedFor)
 	}
-	want := core.GraphOptions{PathPrefix: "app/", IncludeTests: true, NodeLimit: 200}
+	want := core.GraphOptions{
+		PathPrefix:   "app/",
+		IncludeTests: true,
+		NodeLimit:    200,
+		Query:        "charge",
+	}
 	if reader.askedOptions != want {
 		t.Errorf("asked with %+v, want %+v", reader.askedOptions, want)
 	}
@@ -263,5 +295,43 @@ func decode(t *testing.T, response *httptest.ResponseRecorder, into any) {
 	t.Helper()
 	if err := json.Unmarshal(response.Body.Bytes(), into); err != nil {
 		t.Fatalf("decoding %q: %v", response.Body.String(), err)
+	}
+}
+
+func TestBrowsingBySearchAnswersWithWhatMatches(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{"work/billing/.git", "work/notes"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatalf("building the tree: %v", err)
+		}
+	}
+	t.Setenv("HOME", root)
+	server := New(&stubReader{up: true}, stubSupervisor{}, "1.2.3", "http://127.0.0.1:8931")
+
+	response := call(t, server, "/api/browse?q=bill")
+
+	var listing browse.Listing
+	decode(t, response, &listing)
+	if len(listing.Entries) != 1 || listing.Entries[0].Name != "billing" {
+		t.Fatalf("got %v, want the billing directory", listing.Entries)
+	}
+	if !listing.Entries[0].Repository {
+		t.Error("a working tree was not marked as one")
+	}
+}
+
+func TestBrowsingWithNoSearchStillListsOneDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "work"), 0o755); err != nil {
+		t.Fatalf("building the tree: %v", err)
+	}
+	server := New(&stubReader{up: true}, stubSupervisor{}, "1.2.3", "http://127.0.0.1:8931")
+
+	response := call(t, server, "/api/browse?path="+root)
+
+	var listing browse.Listing
+	decode(t, response, &listing)
+	if listing.Path != root || len(listing.Entries) != 1 {
+		t.Fatalf("got %v at %s, want the one directory", listing.Entries, listing.Path)
 	}
 }

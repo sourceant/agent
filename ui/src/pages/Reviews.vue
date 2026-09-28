@@ -6,16 +6,16 @@ import {
   Chip,
   Diff,
   DotIndicator,
-  ItemCard,
+  Input,
   Markdown,
   Empty,
   Loading,
   Notice,
-  Origin,
   PageHead,
   Section,
   Select,
   Status,
+  Table,
   Tabs,
 } from '@sourceant/design'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -27,12 +27,12 @@ import {
   CircleAlert,
   CircleCheck,
   MessageSquare,
-  Clock,
   FileCode,
   FileText,
   GitCommit,
   Lightbulb,
   Loader2,
+  Search,
   ShieldCheck,
   Sparkles,
   TriangleAlert,
@@ -42,6 +42,7 @@ import EmptyMachine from '~/components/EmptyMachine.vue'
 import { useUp } from '~/composables/useUp'
 import { EVERY, useRepositories } from '~/composables/useRepositories'
 import { api } from '~/api'
+import { when } from '~/moments'
 
 /* Work read before anybody else has been asked to read it.
  *
@@ -54,7 +55,7 @@ import { api } from '~/api'
 const route = useRoute()
 const router = useRouter()
 const up = useUp()
-const { repositories, chosen, error, mixed, fetchRepositories } = useRepositories({
+const { repositories, chosen, error, fetchRepositories } = useRepositories({
   all: true,
 })
 const running = ref(false)
@@ -67,6 +68,32 @@ const picked = ref([])
 const adding = ref('')
 const skills = ref([])
 const past = ref([])
+const term = ref('')
+
+const columns = [
+  { id: 'status', label: 'Status', width: '6rem' },
+  { id: 'review', label: 'Review' },
+  { id: 'repository', label: 'Repository', narrow: true },
+  { id: 'started', label: 'Started', narrow: true },
+  { id: 'took', label: 'Took', align: 'right', narrow: true },
+]
+
+// How long it took, for telling a review that ran from one that gave up at once.
+function took(one) {
+  if (!one.finished || !one.started) return ''
+  const seconds = Math.round((new Date(one.finished) - new Date(one.started)) / 1000)
+  if (seconds < 1) return 'instant'
+  if (seconds < 60) return `${seconds}s`
+  return `${Math.round(seconds / 60)}m`
+}
+
+const earlier = computed(() => {
+  const wanted = term.value.trim().toLowerCase()
+  if (!wanted) return past.value
+  return past.value.filter((one) =>
+    `${one.title ?? ''} ${one.repository ?? ''} ${one.status ?? ''}`.toLowerCase().includes(wanted),
+  )
+})
 const tab = ref('overview')
 
 const files = computed(() => result.value?.changed ?? [])
@@ -258,17 +285,6 @@ async function loadPast() {
   }
 }
 
-function when(stamp) {
-  if (!stamp) return ''
-  const at = new Date(stamp)
-  const ago = Math.round((Date.now() - at.getTime()) / 60000)
-  if (ago < 1) return 'just now'
-  if (ago < 60) return `${ago} minute${ago === 1 ? '' : 's'} ago`
-  const hours = Math.round(ago / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
-  return at.toLocaleDateString()
-}
-
 async function checkModel() {
   try {
     const settings = await api.settings()
@@ -341,14 +357,11 @@ async function collect(id, useModel = true) {
     error.value = answered.error
     return
   }
-  if (answered.repository && answered.repository !== chosen.value) {
-    chosen.value = answered.repository
-  }
   result.value = answered.review
   looking.value = ''
   tab.value = 'overview'
-  loadPast()
-  if (answered.repository) chosen.value = answered.repository
+  // Opening one does not narrow the page to its repository: coming back would
+  // then show a listing of one, and the choice is shared with every screen.
   // What it was actually read against, so removing one and running again is
   // the obvious next move rather than a form to fill in.
   picked.value = (answered.review.skills ?? []).map((one) => one.id)
@@ -457,7 +470,10 @@ onMounted(async () => {
     <template v-else>
       <Notice v-if="!hasModel && chosen" tone="info" class="mb-4">
         No model is configured, so nothing here can be judged. Reading what changed needs nothing.
-        Choose a model in Settings to have the work read against your skills.
+        <RouterLink to="/settings?group=Model" class="font-medium underline">
+          Choose a model
+        </RouterLink>
+        to have the work read against your skills.
       </Notice>
 
       <template v-if="!result">
@@ -489,35 +505,44 @@ onMounted(async () => {
           </Empty>
 
           <template v-if="past.length">
-            <p class="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Earlier</p>
-            <div class="space-y-2">
-              <ItemCard
-                v-for="one in past"
-                :key="one.id"
-                :title="one.title || one.repository"
-                :subtitle="one.id"
-                pillar="review"
-                hover
-                class="cursor-pointer"
-                @click="router.push(`/reviews/${one.id}`)"
-              >
-                <template #icon><Clock class="h-5 w-5" /></template>
-                <template #badges>
-                  <UiBadge
-                    :variant="one.status === 'done' ? 'success' : one.status === 'failed' ? 'destructive' : 'secondary'"
-                  >
-                    {{ one.status }}
-                  </UiBadge>
-                </template>
-                <template #meta>
-                  <span>{{ when(one.started) }}</span>
-                  <Origin v-if="mixed" :name="one.repository">
-                    <template #icon><Boxes class="h-3 w-3" /></template>
-                  </Origin>
-                  <span v-else class="font-mono">{{ one.repository }}</span>
-                </template>
-              </ItemCard>
+            <div class="mb-2 flex items-center justify-between gap-3">
+              <p class="text-xs uppercase tracking-wider text-muted-foreground">Earlier</p>
+              <div v-if="past.length > 5" class="relative">
+                <Search class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input v-model="term" size="sm" placeholder="Find a review" class="w-48 pl-8" aria-label="Find a review" />
+              </div>
             </div>
+
+            <Table :columns="columns" :rows="earlier" row-key="id" label="Earlier reviews">
+              <template #status="{ row }">
+                <UiBadge
+                  :variant="row.status === 'done' ? 'success' : row.status === 'failed' ? 'destructive' : 'secondary'"
+                >
+                  {{ row.status }}
+                </UiBadge>
+              </template>
+              <template #review="{ row }">
+                <button
+                  type="button"
+                  class="block max-w-md truncate text-left font-medium hover:text-primary"
+                  @click="router.push(`/reviews/${row.id}`)"
+                >
+                  {{ row.title || 'Unnamed' }}
+                </button>
+                <span v-if="row.error" class="block max-w-md truncate text-xs text-destructive">
+                  {{ row.error }}
+                </span>
+              </template>
+              <template #repository="{ row }">
+                <span class="font-mono text-xs text-muted-foreground">{{ row.repository }}</span>
+              </template>
+              <template #started="{ row }">
+                <span class="text-muted-foreground">{{ when(row.started) }}</span>
+              </template>
+              <template #took="{ row }">
+                <span class="tabular-nums text-muted-foreground">{{ took(row) }}</span>
+              </template>
+            </Table>
           </template>
         </template>
       </template>
@@ -597,8 +622,12 @@ onMounted(async () => {
         </div>
 
         <div v-else-if="tab === 'overview'" class="min-h-0 flex-1 overflow-y-auto">
-          <Empty v-if="!anything" title="Read, not judged" compact>
-            {{ result.note || 'Ask for a review to have it read properly.' }}
+          <Empty v-if="!files.length" title="No changes" compact>
+            {{ where?.branch || 'This checkout' }} matches {{ where?.against || 'its base' }}.
+            Nothing to read.
+          </Empty>
+          <Empty v-else-if="!anything" title="Read, not judged" compact>
+            {{ result.note || 'No model was asked, so nothing was judged.' }}
           </Empty>
 
           <UiCard v-else class="divide-y px-5 py-1">
@@ -611,7 +640,7 @@ onMounted(async () => {
                message says it to whoever opens it, not to everybody. -->
           <Section
             v-if="unmet.length || overall.length"
-            title="Against what this team wrote down"
+            title="Skill checks"
             tone="warning"
             :count="unmet.length + overall.length"
             collapsible
@@ -673,7 +702,7 @@ onMounted(async () => {
 
           <Section
             v-if="summary?.key_improvements?.length"
-            title="Worth changing"
+            title="Recommended changes"
             tone="warning"
             :count="summary.key_improvements.length"
             collapsible
