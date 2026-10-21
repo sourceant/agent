@@ -211,6 +211,7 @@ func TestHealthyIsFalseWhenTheCoreIsNotThere(t *testing.T) {
 // field nobody named is dropped without a word: the commits a branch is ahead
 // by went missing that way, and the page that drew them looked simply empty.
 func TestNothingTheCoreSaysAboutAReviewIsDroppedInTransit(t *testing.T) {
+	execution := fixture(t, "review-execution.json")
 	client := serving(t, map[string]func(http.ResponseWriter, *http.Request){
 		"/api/local/reviews/abc": func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(`{"data":{
@@ -222,7 +223,7 @@ func TestNothingTheCoreSaysAboutAReviewIsDroppedInTransit(t *testing.T) {
 					"review":{"verdict":"COMMENT","suggestions":[
 						{"path":"a.py","start_line":2,"comment":"c","category":"BUG",
 						 "existing_code":"was","suggested_code":"is"}
-					]}
+					],"execution":` + string(execution) + `}
 				}
 			}}`))
 		},
@@ -244,6 +245,9 @@ func TestNothingTheCoreSaysAboutAReviewIsDroppedInTransit(t *testing.T) {
 	}
 
 	suggestions := read.Review.Read.Suggestions
+	if !strings.Contains(string(read.Review.Read.Execution), "review-0") {
+		t.Fatal("review execution details were dropped")
+	}
 	if len(suggestions) != 1 {
 		t.Fatalf("got %d suggestions, want 1", len(suggestions))
 	}
